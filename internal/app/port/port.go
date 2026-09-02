@@ -67,6 +67,8 @@ const (
 	FileInstalled FileAction = "installed"
 	// FilePreserved means an existing file was kept untouched.
 	FilePreserved FileAction = "preserved"
+	// FileUpdated means an existing file was amended, not replaced.
+	FileUpdated FileAction = "updated"
 )
 
 // InstalledFile reports the outcome for one scaffolded file.

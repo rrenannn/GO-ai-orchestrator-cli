@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,9 +23,20 @@ func newCycle(store *fakeStore, runner *fakeRunner) (*usecase.Cycle, *fakeObserv
 
 // newValidatingCycle exposes the validator so a test can script its outcome.
 func newValidatingCycle(store *fakeStore, runner *fakeRunner, validator *fakeValidator) (*usecase.Cycle, *fakeObserver, *fakeValidator) {
-	observer := &fakeObserver{}
-	cycle := usecase.NewCycle(store, runner, validator, &fakeLogs{}, fixedClock{}, prompt.NewBuilder())
+	cycle, observer := newCommittingCycle(store, runner, validator, newWorkspace())
 	return cycle, observer, validator
+}
+
+// newCommittingCycle exposes the repository so a test can watch the commits.
+func newCommittingCycle(
+	store *fakeStore,
+	runner *fakeRunner,
+	validator *fakeValidator,
+	workspace *fakeWorkspace,
+) (*usecase.Cycle, *fakeObserver) {
+	observer := &fakeObserver{}
+	cycle := usecase.NewCycle(store, runner, validator, workspace, &fakeLogs{}, fixedClock{}, prompt.NewBuilder())
+	return cycle, observer
 }
 
 // run executes a cycle with the observer the helper created.
@@ -559,5 +571,141 @@ func TestValidationThatCannotRunStopsTheExecution(t *testing.T) {
 	_, err := cycle.Execute(context.Background(), usecase.CycleInput{ProjectDir: "/project", Observer: observer})
 	if !errors.Is(err, usecase.ErrValidationFailed) {
 		t.Fatalf("want ErrValidationFailed, got %v", err)
+	}
+}
+
+// approvingRun scripts the shortest path to an approved task.
+func approvingRun(store *fakeStore) *fakeRunner {
+	return &fakeRunner{store: store, script: []step{
+		{writes: state(workflow.PhaseReviewing, "TA")},
+		{writes: state(workflow.PhaseApproved, "TA"), board: boardWith(task.StatusApproved)},
+		{writes: state(workflow.PhaseCompleted, "TA")},
+	}}
+}
+
+func TestApprovedTaskIsCommittedOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		initialized: true,
+		state:       workflow.State{Phase: workflow.PhaseImplementing, TaskID: "TA"},
+		board:       *boardWith(task.StatusImplementing),
+	}
+	workspace := newWorkspace()
+	cycle, observer := newCommittingCycle(store, approvingRun(store), &fakeValidator{}, workspace)
+
+	if _, err := cycle.Execute(context.Background(), usecase.CycleInput{
+		ProjectDir: "/project",
+		Observer:   observer,
+		Commit:     true,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(workspace.commits) != 1 {
+		t.Fatalf("want one commit per approved task, got %d", len(workspace.commits))
+	}
+	message := workspace.commits[0]
+	if !strings.HasPrefix(message, "feat(TA): task A") {
+		t.Fatalf("unexpected commit subject: %q", message)
+	}
+	if !strings.Contains(message, "Aprovado pelo revisor sem correções.") {
+		t.Fatalf("the message must say how the task got there: %q", message)
+	}
+
+	committed, ok := firstOf[event.Committed](observer)
+	if !ok || committed.TaskID != "TA" || committed.Hash != "abc1234" {
+		t.Fatalf("the commit must be reported: %+v", committed)
+	}
+}
+
+func TestNothingIsCommittedWithoutTheFlag(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		initialized: true,
+		state:       workflow.State{Phase: workflow.PhaseImplementing, TaskID: "TA"},
+		board:       *boardWith(task.StatusImplementing),
+	}
+	workspace := newWorkspace()
+	cycle, observer := newCommittingCycle(store, approvingRun(store), &fakeValidator{}, workspace)
+
+	if _, err := cycle.Execute(context.Background(), usecase.CycleInput{ProjectDir: "/project", Observer: observer}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(workspace.commits) != 0 {
+		t.Fatalf("committing is opt-in, got %v", workspace.commits)
+	}
+}
+
+func TestCommitMessageCountsTheCorrectionRounds(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		initialized: true,
+		state:       workflow.State{Phase: workflow.PhaseReviewing, TaskID: "TA"},
+		board:       *boardWith(task.StatusImplementing),
+	}
+	runner := &fakeRunner{store: store, script: []step{
+		{writes: state(workflow.PhaseFixing, "TA")},
+		{writes: state(workflow.PhaseReviewing, "TA")},
+		{writes: state(workflow.PhaseApproved, "TA"), board: boardWith(task.StatusApproved)},
+		{writes: state(workflow.PhaseCompleted, "TA")},
+	}}
+	workspace := newWorkspace()
+	cycle, observer := newCommittingCycle(store, runner, &fakeValidator{}, workspace)
+
+	if _, err := cycle.Execute(context.Background(), usecase.CycleInput{
+		ProjectDir: "/project",
+		Observer:   observer,
+		Commit:     true,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(workspace.commits) != 1 || !strings.Contains(workspace.commits[0], "após 1 rodada de correção") {
+		t.Fatalf("unexpected commit message: %v", workspace.commits)
+	}
+}
+
+func TestCommitProblemsNeverFailTheRun(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]func(*fakeWorkspace){
+		"fora de um repositório": func(w *fakeWorkspace) { w.repository = false },
+		"nada para commitar":     func(w *fakeWorkspace) { w.changes = false },
+		"git recusou o commit":   func(w *fakeWorkspace) { w.commitErr = errors.New("pre-commit hook failed") },
+	}
+
+	for name, arrange := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			store := &fakeStore{
+				initialized: true,
+				state:       workflow.State{Phase: workflow.PhaseImplementing, TaskID: "TA"},
+				board:       *boardWith(task.StatusImplementing),
+			}
+			workspace := newWorkspace()
+			arrange(workspace)
+			cycle, observer := newCommittingCycle(store, approvingRun(store), &fakeValidator{}, workspace)
+
+			output, err := cycle.Execute(context.Background(), usecase.CycleInput{
+				ProjectDir: "/project",
+				Observer:   observer,
+				Commit:     true,
+			})
+			if err != nil {
+				t.Fatalf("the work is in the tree either way: %v", err)
+			}
+			if output.FinalState.Phase != workflow.PhaseCompleted {
+				t.Fatalf("the run must finish, got %s", output.FinalState.Phase)
+			}
+			if countOf[event.Committed](observer) != 0 {
+				t.Fatal("no commit must be announced")
+			}
+			if countOf[event.Notice](observer) == 0 {
+				t.Fatal("the operator must be told why nothing was committed")
+			}
+		})
 	}
 }

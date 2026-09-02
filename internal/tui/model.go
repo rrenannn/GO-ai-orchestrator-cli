@@ -567,6 +567,10 @@ func (m *model) apply(published event.Event) {
 		delete(m.files, paneReview)
 		delete(m.files, paneDiff)
 
+	case event.Committed:
+		m.append(line{kind: lineOK, text: "commit " + typed.Hash + "  " + typed.Subject})
+		delete(m.files, paneDiff)
+
 	case event.Notice:
 		kind := lineInfo
 		if typed.Level == event.LevelWarn {

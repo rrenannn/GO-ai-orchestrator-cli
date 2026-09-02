@@ -25,6 +25,8 @@ Claude planeja, Codex implementa, Claude revisa, Codex corrige.
 Flags (run, start, cycle):
   --plain               transcrição em texto, sem interface interativa
   --dry-run             mostra qual agente rodaria, sem despachar nada
+  --commit              commita cada tarefa aprovada pelo revisor
+  --no-validate         não roda os comandos de validação das tarefas
   --max-fixes <n>       rodadas de correção por tarefa (padrão 2)
   --max-steps <n>       despachos de agente por execução (padrão 12)
   --timeout <duração>   timeout por agente, ex.: 20m (padrão: sem limite)

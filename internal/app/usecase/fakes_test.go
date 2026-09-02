@@ -97,6 +97,41 @@ func failing(command string) []validation.Result {
 	return []validation.Result{{Command: command, ExitCode: 1, Output: "FAIL ./internal/http"}}
 }
 
+// fakeWorkspace stands in for the git repository of a project.
+type fakeWorkspace struct {
+	repository bool
+	changes    bool
+	commits    []string
+	hash       string
+	commitErr  error
+	inspectErr error
+}
+
+func newWorkspace() *fakeWorkspace {
+	return &fakeWorkspace{repository: true, changes: true, hash: "abc1234"}
+}
+
+func (w *fakeWorkspace) IsRepository(context.Context, string) (bool, error) {
+	return w.repository, w.inspectErr
+}
+
+func (w *fakeWorkspace) Diff(context.Context, string) (string, error) {
+	return "diff --git a/main.go b/main.go", nil
+}
+
+func (w *fakeWorkspace) HasChanges(context.Context, string) (bool, error) {
+	return w.changes, nil
+}
+
+func (w *fakeWorkspace) Commit(_ context.Context, _ string, message string) (string, error) {
+	if w.commitErr != nil {
+		return "", w.commitErr
+	}
+	w.commits = append(w.commits, message)
+	w.changes = false
+	return w.hash, nil
+}
+
 // step is one scripted agent turn: what it writes back and how it exits.
 type step struct {
 	writes   *workflow.State

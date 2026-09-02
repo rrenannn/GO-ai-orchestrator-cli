@@ -38,16 +38,16 @@ func run(ctx context.Context) int {
 		os.Getenv("FORGE_CLAUDE_CMD"),
 		os.Getenv("FORGE_CODEX_CMD"),
 	)
+	workspace := gitrepo.New(os.Getenv("FORGE_GIT_CMD"))
 	cycle := usecase.NewCycle(
 		store,
 		runner,
 		process.NewValidator(),
+		workspace,
 		runlog.NewLogger(),
 		clock.New(),
 		prompt.NewBuilder(),
 	)
-
-	workspace := gitrepo.New(os.Getenv("FORGE_GIT_CMD"))
 
 	container := cli.Container{
 		Initialize: usecase.NewInitialize(scaffold.NewInstaller()),

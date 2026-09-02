@@ -60,6 +60,9 @@ func (r *PlainRenderer) Publish(published event.Event) {
 	case event.PhaseChanged:
 		r.printf("%s -> %s", typed.From.Phase, typed.To.Phase)
 
+	case event.Committed:
+		r.printf("commit %s  %s", typed.Hash, typed.Subject)
+
 	case event.Notice:
 		if typed.Level == event.LevelWarn {
 			r.printf("warning: %s", typed.Message)

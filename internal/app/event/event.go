@@ -88,6 +88,13 @@ type PhaseChanged struct {
 	To   workflow.State
 }
 
+// Committed reports approved work recorded in the repository.
+type Committed struct {
+	TaskID  string
+	Hash    string
+	Subject string
+}
+
 // Paused and Resumed report operator control over the loop.
 type Paused struct{}
 
@@ -118,6 +125,7 @@ func (ValidationStarted) isEvent()  {}
 func (ValidationOutput) isEvent()   {}
 func (ValidationFinished) isEvent() {}
 func (PhaseChanged) isEvent()       {}
+func (Committed) isEvent()          {}
 func (Paused) isEvent()             {}
 func (Resumed) isEvent()            {}
 func (Notice) isEvent()             {}

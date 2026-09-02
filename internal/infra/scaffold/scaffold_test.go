@@ -3,6 +3,7 @@ package scaffold_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
@@ -20,8 +21,8 @@ func TestInstallWritesTheManagedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(files) != 8 {
-		t.Fatalf("want 8 managed files, got %d", len(files))
+	if len(files) != 9 {
+		t.Fatalf("want 9 managed files, got %d", len(files))
 	}
 	for _, file := range files {
 		if file.Action != port.FileInstalled {
@@ -90,4 +91,63 @@ func TestInstallForceOverwrites(t *testing.T) {
 	if string(raw) == "stale" {
 		t.Fatal("the file was not replaced")
 	}
+}
+
+func TestInstallKeepsRunLogsOutOfGit(t *testing.T) {
+	t.Parallel()
+
+	// No .gitignore yet: one is created.
+	fresh := t.TempDir()
+	files, err := scaffold.NewInstaller().Install(fresh, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	last := files[len(files)-1]
+	if last.Path != ".gitignore" || last.Action != port.FileInstalled {
+		t.Fatalf("unexpected outcome: %+v", last)
+	}
+	if content := read(t, fresh, ".gitignore"); !strings.Contains(content, ".agent/runs/") {
+		t.Fatalf("unexpected .gitignore:\n%s", content)
+	}
+
+	// Installing again changes nothing: the entry is already there.
+	files, err = scaffold.NewInstaller().Install(fresh, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if last = files[len(files)-1]; last.Action != port.FilePreserved {
+		t.Fatalf("a second install must not duplicate the entry: %+v", last)
+	}
+}
+
+func TestInstallAppendsToAnExistingGitignore(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("/bin/\nvendor/"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := scaffold.NewInstaller().Install(dir, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if last := files[len(files)-1]; last.Action != port.FileUpdated {
+		t.Fatalf("want the file amended, got %+v", last)
+	}
+
+	content := read(t, dir, ".gitignore")
+	if !strings.Contains(content, "vendor/") || !strings.Contains(content, ".agent/runs/") {
+		t.Fatalf("what was there must survive:\n%s", content)
+	}
+}
+
+func read(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	raw, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
 }

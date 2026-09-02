@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/event"
@@ -33,6 +34,7 @@ type CycleInput struct {
 	MaxSteps       int
 	AgentTimeout   time.Duration
 	SkipValidation bool
+	Commit         bool
 	Observer       port.Observer
 	Gate           port.Gate
 }
@@ -77,6 +79,7 @@ type Cycle struct {
 	store     port.StateStore
 	runner    port.AgentRunner
 	validator port.Validator
+	workspace port.Workspace
 	logs      port.RunLog
 	clock     port.Clock
 	prompts   prompt.Builder
@@ -87,6 +90,7 @@ func NewCycle(
 	store port.StateStore,
 	runner port.AgentRunner,
 	validator port.Validator,
+	workspace port.Workspace,
 	logs port.RunLog,
 	clock port.Clock,
 	prompts prompt.Builder,
@@ -95,6 +99,7 @@ func NewCycle(
 		store:     store,
 		runner:    runner,
 		validator: validator,
+		workspace: workspace,
 		logs:      logs,
 		clock:     clock,
 		prompts:   prompts,
@@ -184,6 +189,9 @@ func (u *Cycle) Execute(ctx context.Context, input CycleInput) (output CycleOutp
 		if err != nil {
 			return output, err
 		}
+		if next.Phase == workflow.PhaseApproved && state.Phase != workflow.PhaseApproved {
+			u.record(ctx, input, next, fixesForTask)
+		}
 		state = next
 	}
 }
@@ -259,6 +267,76 @@ func (u *Cycle) dispatch(
 	input.Observer.Publish(event.PhaseChanged{From: current, To: next})
 	u.publishBoard(input, next)
 	return next, nil
+}
+
+// record commits the work of a task the reviewer just approved. It is opt-in:
+// committing to someone else's repository uninvited is not a favour. Nothing
+// here can fail the run — the work is in the tree either way.
+func (u *Cycle) record(ctx context.Context, input CycleInput, approved workflow.State, corrections int) {
+	if !input.Commit || u.workspace == nil {
+		return
+	}
+
+	warn := func(format string, arguments ...any) {
+		input.Observer.Publish(event.Notice{Level: event.LevelWarn, Message: fmt.Sprintf(format, arguments...)})
+	}
+
+	repository, err := u.workspace.IsRepository(ctx, input.ProjectDir)
+	if err != nil {
+		warn("não foi possível inspecionar o repositório: %v", err)
+		return
+	}
+	if !repository {
+		warn("--commit ignorado: %s não é um repositório git", input.ProjectDir)
+		return
+	}
+
+	changed, err := u.workspace.HasChanges(ctx, input.ProjectDir)
+	if err != nil {
+		warn("não foi possível inspecionar as mudanças: %v", err)
+		return
+	}
+	if !changed {
+		input.Observer.Publish(event.Notice{
+			Level:   event.LevelInfo,
+			Message: fmt.Sprintf("tarefa %s aprovada sem mudanças para commitar", approved.TaskID),
+		})
+		return
+	}
+
+	current, err := u.currentTask(input.ProjectDir, approved)
+	if err != nil {
+		warn("não foi possível ler a tarefa aprovada: %v", err)
+		return
+	}
+
+	subject, message := commitMessage(approved.TaskID, current.Objective, corrections)
+	hash, err := u.workspace.Commit(ctx, input.ProjectDir, message)
+	if err != nil {
+		warn("não foi possível commitar a tarefa %s: %v", approved.TaskID, err)
+		return
+	}
+	input.Observer.Publish(event.Committed{TaskID: approved.TaskID, Hash: hash, Subject: subject})
+}
+
+// commitMessage describes an approved task the way a person would.
+func commitMessage(taskID, objective string, corrections int) (subject, message string) {
+	objective = strings.TrimSpace(objective)
+	if objective == "" {
+		objective = "tarefa " + taskID
+	}
+	subject = fmt.Sprintf("feat(%s): %s", taskID, objective)
+
+	rounds := "sem correções"
+	switch corrections {
+	case 1:
+		rounds = "após 1 rodada de correção"
+	default:
+		if corrections > 1 {
+			rounds = fmt.Sprintf("após %d rodadas de correção", corrections)
+		}
+	}
+	return subject, fmt.Sprintf("%s\n\nAprovado pelo revisor %s.\nOrquestrado pelo forge.\n", subject, rounds)
 }
 
 // validate runs the commands the plan declared for the task that just left

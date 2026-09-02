@@ -146,6 +146,7 @@ força esse modo, e `--dry-run` sempre usa ele.
 | `--plain` | `false` | transcrição em texto, sem interface interativa |
 | `--dry-run` | `false` | mostra qual agente rodaria, sem despachar nada |
 | `--no-validate` | `false` | não roda os comandos de validação das tarefas |
+| `--commit` | `false` | commita cada tarefa aprovada pelo revisor |
 | `--max-fixes <n>` | `2` | rodadas de correção permitidas por tarefa |
 | `--max-steps <n>` | `12` | despachos de agente permitidos por execução |
 | `--timeout <dur>` | sem limite | timeout por agente, ex.: `20m` |
@@ -180,6 +181,27 @@ Os comandos rodam via `sh -c` na raiz do projeto, então o plano precisa
 declarar comandos não interativos e determinísticos — o `CLAUDE.md` instalado
 pelo `init` já instrui o arquiteto nesse sentido.
 
+## Commit por tarefa aprovada
+
+Com `--commit`, cada tarefa que o revisor aprova vira um commit no projeto:
+
+```text
+feat(T2): criar o handler de health
+
+Aprovado pelo revisor após 1 rodada de correção.
+Orquestrado pelo forge.
+```
+
+Assim o histórico conta o que foi feito tarefa a tarefa, dá para reverter uma
+sozinha, e o revisor da tarefa seguinte enxerga um diff limpo em vez do acúmulo
+de tudo. As transcrições em `.agent/runs/` ficam de fora: o `init` as adiciona
+ao `.gitignore` do projeto.
+
+Está **desligado por padrão** — sem a flag, tudo fica na árvore de trabalho para
+você revisar. Problemas ao commitar (fora de um repositório, hook recusando,
+nada mudado) viram aviso e nunca derrubam a execução: o trabalho está salvo na
+árvore de qualquer forma.
+
 ## Máquina de estados
 
 O `forge` é a autoridade sobre o fluxo: depois de cada despacho ele relê
@@ -212,6 +234,8 @@ Os agentes se comunicam por arquivos no projeto alvo, e não pelo processo:
 
 `CLAUDE.md` e `AGENTS.md` levam as regras de cada papel. O `init` preserva
 arquivos existentes; use `--force` para sobrescrever os gerenciados pelo kit.
+Ele também acrescenta `.agent/runs/` ao `.gitignore` do projeto, sem tocar no
+que já estiver lá.
 
 ## Arquitetura
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
 )
@@ -68,5 +69,49 @@ func (i *Installer) Install(projectDir string, force bool) ([]port.InstalledFile
 		}
 		results = append(results, port.InstalledFile{Path: file.destination, Action: port.FileInstalled})
 	}
-	return results, nil
+
+	ignored, err := ignoreRunLogs(projectDir)
+	if err != nil {
+		return nil, err
+	}
+	return append(results, ignored), nil
+}
+
+// ignoreRunLogs keeps the transcripts out of the history of the project. They
+// are local artifacts that grow during a run, and committing them - by hand or
+// through --commit - only adds noise to every diff.
+func ignoreRunLogs(projectDir string) (port.InstalledFile, error) {
+	const entry = ".agent/runs/"
+
+	path := filepath.Join(projectDir, ".gitignore")
+	outcome := port.InstalledFile{Path: ".gitignore", Action: port.FileUpdated}
+
+	existing, err := os.ReadFile(path)
+	switch {
+	case os.IsNotExist(err):
+		outcome.Action = port.FileInstalled
+		existing = nil
+	case err != nil:
+		return port.InstalledFile{}, err
+	}
+
+	for _, line := range strings.Split(string(existing), "\n") {
+		if strings.TrimSpace(line) == entry {
+			outcome.Action = port.FilePreserved
+			return outcome, nil
+		}
+	}
+
+	addition := "# transcrições das execuções do forge\n" + entry + "\n"
+	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
+		addition = "\n" + addition
+	}
+	if len(existing) > 0 {
+		addition = "\n" + addition
+	}
+
+	if err := os.WriteFile(path, append(existing, addition...), 0o644); err != nil {
+		return port.InstalledFile{}, fmt.Errorf("write %s: %w", path, err)
+	}
+	return outcome, nil
 }

@@ -29,6 +29,7 @@ func newApp(t *testing.T) (*cli.App, *bytes.Buffer, *bytes.Buffer) {
 		store,
 		process.NewRunner("echo", "echo"),
 		process.NewValidator(),
+		gitrepo.New(""),
 		runlog.NewLogger(),
 		clock.New(),
 		prompt.NewBuilder(),
