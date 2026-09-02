@@ -1,18 +1,18 @@
 package cli
 
-const usageText = `maestro - orquestrador de agentes de IA
+const usageText = `forge - orquestrador de agentes de IA
 Claude planeja e revisa, Codex implementa.
 
 Uso:
-  maestro                            abre a sessão interativa no diretório atual
-  maestro run    [flags] [projeto]   abre a sessão interativa em um projeto
-  maestro init   [--force] [projeto]
-  maestro start  [flags] [projeto] <requisito>
-  maestro cycle  [flags] [projeto]
-  maestro status [projeto]
-  maestro version
+  forge                            abre a sessão interativa no diretório atual
+  forge run    [flags] [projeto]   abre a sessão interativa em um projeto
+  forge init   [--force] [projeto]
+  forge start  [flags] [projeto] <requisito>
+  forge cycle  [flags] [projeto]
+  forge status [projeto]
+  forge version
 
-Na sessão interativa você digita o que quer construir e o maestro orquestra:
+Na sessão interativa você digita o que quer construir e o forge orquestra:
 Claude planeja, Codex implementa, Claude revisa, Codex corrige.
 
   enter          envia o pedido
@@ -36,8 +36,8 @@ Teclas dos painéis (durante a execução):
   r              recarrega o arquivo do painel
 
 Ambiente:
-  MAESTRO_CLAUDE_CMD   executável do Claude Code (padrão: claude)
-  MAESTRO_CODEX_CMD    executável do Codex (padrão: codex)
+  FORGE_CLAUDE_CMD   executável do Claude Code (padrão: claude)
+  FORGE_CODEX_CMD    executável do Codex (padrão: codex)
 
 Fluxo:
   request -> arquiteto planeja -> builder implementa e valida

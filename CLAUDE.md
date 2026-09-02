@@ -59,7 +59,7 @@ with actionable findings.
 
 # Workflow contract
 
-Maestro reads `.agent/STATUS.md` after every dispatch and refuses any
+Forge reads `.agent/STATUS.md` after every dispatch and refuses any
 transition outside this machine:
 
 ```text

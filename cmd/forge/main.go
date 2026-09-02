@@ -1,4 +1,4 @@
-// Command maestro orchestrates an AI agent workflow over a target project:
+// Command forge orchestrates an AI agent workflow over a target project:
 // Claude architects and reviews, Codex implements.
 //
 // This file is the composition root: it is the only place where the concrete
@@ -34,8 +34,8 @@ func main() {
 func run(ctx context.Context) int {
 	store := fsstate.NewStore()
 	runner := process.NewRunner(
-		os.Getenv("MAESTRO_CLAUDE_CMD"),
-		os.Getenv("MAESTRO_CODEX_CMD"),
+		os.Getenv("FORGE_CLAUDE_CMD"),
+		os.Getenv("FORGE_CODEX_CMD"),
 	)
 	cycle := usecase.NewCycle(store, runner, runlog.NewLogger(), clock.New(), prompt.NewBuilder())
 

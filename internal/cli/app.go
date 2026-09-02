@@ -52,7 +52,7 @@ func New(container Container, stdout, stderr io.Writer, version string, interact
 
 // Run executes one command and returns the process exit code.
 func (a *App) Run(ctx context.Context, args []string) int {
-	// No command opens the interactive session, the way maestro is meant to
+	// No command opens the interactive session, the way forge is meant to
 	// be used: you type what you want built and it orchestrates.
 	if len(args) == 0 {
 		return a.report(a.runInteractive(ctx, nil))
@@ -73,7 +73,7 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	case "status":
 		err = a.runStatus(rest)
 	case "version", "--version", "-v":
-		fmt.Fprintf(a.stdout, "maestro %s\n", a.version)
+		fmt.Fprintf(a.stdout, "forge %s\n", a.version)
 	case "help", "--help", "-h":
 		fmt.Fprint(a.stdout, usageText)
 	default:
@@ -102,7 +102,7 @@ func (a *App) report(err error) int {
 	default:
 		fmt.Fprintf(a.stderr, "erro: %v\n", err)
 		if errors.Is(err, usecase.ErrNotInitialized) {
-			fmt.Fprintln(a.stderr, "dica: rode `maestro init <projeto>` primeiro")
+			fmt.Fprintln(a.stderr, "dica: rode `forge init <projeto>` primeiro")
 		}
 		return ExitError
 	}
@@ -112,7 +112,7 @@ var errUsage = errors.New("argumentos inválidos")
 
 func (a *App) runInit(args []string) error {
 	flags := a.newFlagSet("init")
-	force := flags.Bool("force", false, "sobrescreve os arquivos gerenciados pelo maestro")
+	force := flags.Bool("force", false, "sobrescreve os arquivos gerenciados pelo forge")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (a *App) runInit(args []string) error {
 		fmt.Fprintf(a.stdout, "%-10s %s\n", file.Action, file.Path)
 	}
 	fmt.Fprintf(a.stdout, "\n%d arquivos prontos em %s\n", len(output.Files), projectDir)
-	fmt.Fprintf(a.stdout, "próximo passo: maestro start %s \"<requisito>\"\n", projectDir)
+	fmt.Fprintf(a.stdout, "próximo passo: forge start %s \"<requisito>\"\n", projectDir)
 	return nil
 }
 
@@ -235,7 +235,7 @@ func (a *App) runInteractive(ctx context.Context, args []string) error {
 	run.input.ProjectDir = projectDir
 
 	if !a.interactive {
-		return fmt.Errorf("%w: o modo interativo precisa de um terminal; use `maestro start %s \"<requisito>\" --plain`", errUsage, projectDir)
+		return fmt.Errorf("%w: o modo interativo precisa de um terminal; use `forge start %s \"<requisito>\" --plain`", errUsage, projectDir)
 	}
 
 	live := tui.NewSession(run.input.ProjectDir)

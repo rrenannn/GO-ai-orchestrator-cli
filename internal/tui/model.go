@@ -363,7 +363,7 @@ func (m *model) runCommand(typed string) (tea.Model, tea.Cmd) {
 		for _, help := range []string{
 			"digite o que você quer construir e envie com enter",
 			"/continue  retoma o ciclo já registrado no projeto",
-			"/quit      sai do maestro",
+			"/quit      sai do forge",
 			"durante a execução: esc interrompe · p pausa · tab troca painel",
 		} {
 			m.append(line{kind: lineInfo, text: help})

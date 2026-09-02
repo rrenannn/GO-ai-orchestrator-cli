@@ -56,7 +56,7 @@ func TestViewShowsTheRunAtAGlance(t *testing.T) {
 	)
 
 	for _, fragment := range []string{
-		"maestro",
+		"forge",
 		"add rate limiting",
 		"T1 add config loader",
 		"T2 add rate limiter",

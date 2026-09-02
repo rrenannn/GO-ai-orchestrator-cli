@@ -48,12 +48,12 @@ type Session struct {
 // stdin, and caches the answer so nothing queries the terminal mid-render:
 // a late reply to that query is read as if the operator had typed it.
 //
-// MAESTRO_BACKGROUND=dark|light skips the query altogether, for terminals
+// FORGE_BACKGROUND=dark|light skips the query altogether, for terminals
 // that answer it badly.
 func settlePalette() {
 	lipgloss.SetColorProfile(lipgloss.ColorProfile())
 
-	if declared, ok := os.LookupEnv("MAESTRO_BACKGROUND"); ok {
+	if declared, ok := os.LookupEnv("FORGE_BACKGROUND"); ok {
 		lipgloss.SetHasDarkBackground(!strings.EqualFold(strings.TrimSpace(declared), "light"))
 		return
 	}
@@ -152,7 +152,7 @@ func (s *Session) interrupt() {
 
 // Run opens the interface and keeps it alive until the operator leaves.
 // autostart, when set, is dispatched as soon as the interface is up, which is
-// how `maestro start "..."` and `maestro cycle` enter the same session.
+// how `forge start "..."` and `forge cycle` enter the same session.
 func (s *Session) Run(ctx context.Context, actions Actions, autostart func(context.Context) error) error {
 	s.mu.Lock()
 	s.base = ctx

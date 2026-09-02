@@ -1,7 +1,7 @@
-# maestro
+# forge
 
 Orquestrador de agentes de IA escrito em Go. Claude Code atua como **arquiteto**
-e **revisor**; Codex atua como **implementador**. O `maestro` dirige o ciclo,
+e **revisor**; Codex atua como **implementador**. O `forge` dirige o ciclo,
 valida cada transição de estado e para sozinho quando não há mais tarefa aberta
 — tudo acompanhado por uma interface de terminal ao vivo.
 
@@ -24,16 +24,36 @@ Claude Architect ──plan──▶ Codex Builder ──test──▶ Claude Re
 
 ## Instalação
 
+O `forge` é um binário só. Compile e instale uma vez:
+
 ```sh
-make build      # gera bin/maestro
-make install    # instala em $GOPATH/bin
+cd /caminho/deste/repositorio
+make install
 ```
+
+`make install` coloca o binário em `$(go env GOPATH)/bin` — normalmente
+`~/go/bin`. Confira que esse diretório está no seu `PATH`:
+
+```sh
+which forge      # deve responder /Users/voce/go/bin/forge
+forge version
+```
+
+Se `which forge` não responder nada, o diretório não está no `PATH`. Adicione
+ao seu `~/.zshrc` e abra um terminal novo:
+
+```sh
+echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> ~/.zshrc
+```
+
+Preferindo não instalar, dá para rodar direto do repositório com `make build`
+e depois `./bin/forge` — mas aí só funciona de dentro dele.
 
 ## Uso
 
 ```sh
-cd /caminho/do/projeto
-maestro
+cd /caminho/do/projeto-que-voce-quer-mexer
+forge
 ```
 
 Só isso. A sessão abre, prepara o projeto se for a primeira vez, e espera você
@@ -44,17 +64,19 @@ dois agentes se revezando.
 › adicionar rate limiting por tenant
 ```
 
-Enter e o maestro assume: Claude planeja, Codex implementa e valida, Claude
+Enter e o forge assume: Claude planeja, Codex implementa e valida, Claude
 revisa, Codex corrige o que a revisão apontou, Claude escolhe a próxima tarefa.
 Quando o ciclo termina, o prompt volta para o próximo pedido.
+
+`esc` interrompe a execução sem fechar a sessão; `ctrl+c` no prompt sai.
 
 Para roteiro, CI ou script, os comandos diretos continuam:
 
 ```sh
-maestro init /projeto                          # só prepara os arquivos
-maestro start /projeto "Adicionar rate limit"  # um pedido, direto
-maestro status /projeto                        # em que fase está
-maestro cycle /projeto                         # retoma de onde parou
+forge init /projeto                          # só prepara os arquivos
+forge start /projeto "Adicionar rate limit"  # um pedido, direto
+forge status /projeto                        # em que fase está
+forge cycle /projeto                         # retoma de onde parou
 ```
 
 O diretório do projeto é opcional em todos: sem ele, vale o diretório atual.
@@ -62,7 +84,7 @@ O diretório do projeto é opcional em todos: sem ele, vale o diretório atual.
 ## A interface
 
 ```text
-╭─ maestro  ~/projetos/api                                    2m14s ─╮
+╭─ forge  ~/projetos/api                                    2m14s ─╮
 │ ✓ plan → ✓ build → ● review → ○ approved → ○ done      ↺ fixing    │
 ╰────────────────────────────────────────────────────────────────────╯
 ╭ PEDIDO                   ╮╭ Live · Plan · Review                   ╮
@@ -107,7 +129,7 @@ Durante a execução:
 | `r` | recarrega o arquivo do painel |
 
 A interface só aparece quando a saída é um terminal. Em pipe, redirecionamento
-ou CI, o `maestro` cai automaticamente na transcrição em texto — `--plain`
+ou CI, o `forge` cai automaticamente na transcrição em texto — `--plain`
 força esse modo, e `--dry-run` sempre usa ele.
 
 ### Flags de `start` e `cycle`
@@ -124,13 +146,13 @@ força esse modo, e `--dry-run` sempre usa ele.
 
 | Variável | Padrão | Efeito |
 | --- | --- | --- |
-| `MAESTRO_CLAUDE_CMD` | `claude` | executável do Claude Code |
-| `MAESTRO_CODEX_CMD` | `codex` | executável do Codex |
-| `MAESTRO_BACKGROUND` | detectado | `dark` ou `light`; evita perguntar a cor de fundo ao terminal |
+| `FORGE_CLAUDE_CMD` | `claude` | executável do Claude Code |
+| `FORGE_CODEX_CMD` | `codex` | executável do Codex |
+| `FORGE_BACKGROUND` | detectado | `dark` ou `light`; evita perguntar a cor de fundo ao terminal |
 
 ## Máquina de estados
 
-O `maestro` é a autoridade sobre o fluxo: depois de cada despacho ele relê
+O `forge` é a autoridade sobre o fluxo: depois de cada despacho ele relê
 `.agent/STATUS.md` e recusa qualquer transição fora da máquina abaixo — o
 builder nunca aprova o próprio trabalho, e um agente que termina sem avançar a
 fase interrompe a execução.
@@ -150,12 +172,12 @@ Os agentes se comunicam por arquivos no projeto alvo, e não pelo processo:
 
 | Arquivo | Escrito por | Conteúdo |
 | --- | --- | --- |
-| `.agent/REQUEST.md` | maestro | o pedido que você digitou |
+| `.agent/REQUEST.md` | forge | o pedido que você digitou |
 | `.agent/PLAN.md` | arquiteto | abordagem, riscos e ordem das tarefas |
 | `.agent/TASKS.json` | arquiteto | tarefas atômicas com critérios e validação |
 | `.agent/REVIEW.md` | revisor | achados e veredito (`APPROVED` / `CHANGES REQUESTED`) |
 | `.agent/STATUS.md` | todos | fase atual e tarefa atual |
-| `.agent/runs/*.log` | maestro | transcrição completa de cada execução |
+| `.agent/runs/*.log` | forge | transcrição completa de cada execução |
 
 `CLAUDE.md` e `AGENTS.md` levam as regras de cada papel. O `init` preserva
 arquivos existentes; use `--force` para sobrescrever os gerenciados pelo kit.
@@ -165,7 +187,7 @@ arquivos existentes; use `--force` para sobrescrever os gerenciados pelo kit.
 Clean architecture, com a regra de dependência apontando sempre para dentro:
 
 ```text
-cmd/maestro               composition root: único lugar que conhece tudo
+cmd/forge               composition root: único lugar que conhece tudo
 internal/cli              delivery: flags, transcrição em texto
 internal/tui              delivery: sessão interativa (Bubble Tea)
 internal/app/usecase      regras de aplicação: o laço de orquestração

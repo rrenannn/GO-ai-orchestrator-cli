@@ -82,7 +82,7 @@ func TestStatusOnAnUninitializedProjectHints(t *testing.T) {
 	if code := app.Run(context.Background(), []string{"status", t.TempDir()}); code != cli.ExitError {
 		t.Fatalf("want an error exit, got %d", code)
 	}
-	if !strings.Contains(stderr.String(), "maestro init") {
+	if !strings.Contains(stderr.String(), "forge init") {
 		t.Fatalf("the error must hint at init:\n%s", stderr)
 	}
 }
@@ -114,7 +114,7 @@ func TestVersion(t *testing.T) {
 	if code := app.Run(context.Background(), []string{"version"}); code != cli.ExitOK {
 		t.Fatalf("want ok, got %d", code)
 	}
-	if !strings.Contains(stdout.String(), "maestro test") {
+	if !strings.Contains(stdout.String(), "forge test") {
 		t.Fatalf("unexpected version output: %s", stdout)
 	}
 }

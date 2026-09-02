@@ -38,7 +38,7 @@ var phaseLabels = map[workflow.Phase]string{
 // View renders the whole interface.
 func (m *model) View() string {
 	if !m.ready {
-		return m.theme.muted.Render("iniciando o maestro…")
+		return m.theme.muted.Render("iniciando o forge…")
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, m.renderTasks(), m.renderStream())
 	return lipgloss.JoinVertical(lipgloss.Left, m.renderHeader(), body, m.renderPrompt(), m.renderFooter())
@@ -67,7 +67,7 @@ func (m *model) renderHeader() string {
 	}
 	title := lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		m.theme.app.Render("maestro"),
+		m.theme.app.Render("forge"),
 		m.theme.muted.Render("  "+shorten(project, max(m.width/2, 20))),
 	)
 	clock := m.theme.muted.Render(format(m.elapsed()))
@@ -260,7 +260,7 @@ func (m *model) status() (string, string) {
 		}
 		return m.theme.badgeDone.Render("PRONTO"), m.theme.muted.Render(shorten(summary, max(m.width-12, 20)))
 	case m.mode == modeIdle:
-		return m.theme.badgeIdle.Render("MAESTRO"), m.theme.muted.Render("descreva o que você quer construir neste projeto")
+		return m.theme.badgeIdle.Render("FORGE"), m.theme.muted.Render("descreva o que você quer construir neste projeto")
 	case m.paused:
 		return m.theme.badgePaused.Render("PAUSADO"), m.theme.muted.Render("o laço para antes do próximo despacho")
 	case m.active:

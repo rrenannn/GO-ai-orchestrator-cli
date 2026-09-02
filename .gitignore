@@ -3,5 +3,5 @@ coverage.out
 .idea/
 .DS_Store
 
-# logs de execução do maestro
+# logs de execução do forge
 .agent/runs/
