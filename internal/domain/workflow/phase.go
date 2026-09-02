@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/agent"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
 )
 
 // Phase is a step of the request lifecycle.

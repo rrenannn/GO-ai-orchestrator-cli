@@ -12,10 +12,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/event"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/agent"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/event"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 // maxLines caps the in-memory transcript. The full one is on disk anyway.

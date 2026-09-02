@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/event"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/event"
 )
 
 // PlainRenderer prints a run as a plain, line-oriented transcript. It is the

@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 const statusHeader = `# Workflow State

@@ -46,6 +46,12 @@ ao seu `~/.zshrc` e abra um terminal novo:
 echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> ~/.zshrc
 ```
 
+Em outra máquina que já tenha Go, dá para instalar sem clonar nada:
+
+```sh
+go install github.com/rrenannn/GO-ai-orchestrator-cli/cmd/forge@latest
+```
+
 Preferindo não instalar, dá para rodar direto do repositório com `make build`
 e depois `./bin/forge` — mas aí só funciona de dentro dele.
 

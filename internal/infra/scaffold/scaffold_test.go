@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/port"
-	"github.com/GO-ai-orchestrator-cli/internal/infra/fsstate"
-	"github.com/GO-ai-orchestrator-cli/internal/infra/scaffold"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/fsstate"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/scaffold"
 )
 
 var _ port.Scaffolder = (*scaffold.Installer)(nil)

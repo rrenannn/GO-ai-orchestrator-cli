@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
 )
 
 // boardDocument is the on-disk shape of .agent/TASKS.json. It is a transport

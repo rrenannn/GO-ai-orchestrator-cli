@@ -7,11 +7,11 @@ import (
 	"io"
 	"time"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/event"
-	"github.com/GO-ai-orchestrator-cli/internal/app/port"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/agent"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/event"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 // fakeStore is an in-memory stand-in for the .agent files.

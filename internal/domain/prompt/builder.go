@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 // Artifacts are the shared files both agents read and write.

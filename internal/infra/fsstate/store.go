@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 // Layout names the artifacts inside a project.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 // Fixed chrome heights, in terminal rows.

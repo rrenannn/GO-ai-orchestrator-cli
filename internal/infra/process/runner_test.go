@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/port"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/agent"
-	"github.com/GO-ai-orchestrator-cli/internal/infra/process"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/process"
 )
 
 var _ port.AgentRunner = (*process.Runner)(nil)

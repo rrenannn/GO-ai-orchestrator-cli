@@ -3,10 +3,10 @@ package usecase
 import (
 	"fmt"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/port"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/agent"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 // StatusInput is the request of the Status use case.

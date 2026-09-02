@@ -3,7 +3,7 @@ package usecase
 import (
 	"fmt"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/port"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
 )
 
 // InitializeInput is the request of the Initialize use case.

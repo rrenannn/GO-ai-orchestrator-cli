@@ -13,7 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/event"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/event"
 )
 
 // eventBuffer absorbs bursts of agent output without ever blocking a run.

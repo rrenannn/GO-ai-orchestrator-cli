@@ -3,7 +3,7 @@ package task_test
 import (
 	"testing"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
 )
 
 func board() task.Board {

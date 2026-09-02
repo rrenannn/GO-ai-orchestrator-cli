@@ -3,8 +3,8 @@ package tui
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/agent"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
 )
 
 // Palette. Adaptive colors keep the interface readable on light and dark

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/prompt"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/prompt"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 func TestBuildCoversEveryActivePhase(t *testing.T) {

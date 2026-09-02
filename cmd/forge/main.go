@@ -11,14 +11,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/usecase"
-	"github.com/GO-ai-orchestrator-cli/internal/cli"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/prompt"
-	"github.com/GO-ai-orchestrator-cli/internal/infra/clock"
-	"github.com/GO-ai-orchestrator-cli/internal/infra/fsstate"
-	"github.com/GO-ai-orchestrator-cli/internal/infra/process"
-	"github.com/GO-ai-orchestrator-cli/internal/infra/runlog"
-	"github.com/GO-ai-orchestrator-cli/internal/infra/scaffold"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/usecase"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/cli"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/prompt"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/clock"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/fsstate"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/process"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/runlog"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/scaffold"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".

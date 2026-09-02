@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/GO-ai-orchestrator-cli/internal/domain/agent"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
 )
 
 // Defaults for the executables backing each agent kind.

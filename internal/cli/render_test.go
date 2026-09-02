@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GO-ai-orchestrator-cli/internal/app/event"
-	"github.com/GO-ai-orchestrator-cli/internal/cli"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/agent"
-	"github.com/GO-ai-orchestrator-cli/internal/domain/workflow"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/event"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/cli"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 func TestPlainRendererPrintsTheWholeRun(t *testing.T) {
