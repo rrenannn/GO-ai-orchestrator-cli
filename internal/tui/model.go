@@ -1,11 +1,14 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -20,13 +23,22 @@ const maxLines = 5000
 
 // Messages exchanged inside the interface.
 type (
-	eventMsg    struct{ published event.Event }
-	finishedMsg struct{ err error }
-	tickMsg     time.Time
-	fileMsg     struct {
+	eventMsg   struct{ published event.Event }
+	runDoneMsg struct{ err error }
+	tickMsg    time.Time
+	fileMsg    struct {
 		pane    pane
 		content string
 	}
+)
+
+// mode says whether the operator is typing the next request or watching the
+// agents work on the current one.
+type mode int
+
+const (
+	modeIdle mode = iota
+	modeRunning
 )
 
 // pane is one of the views of the right side.
@@ -54,6 +66,7 @@ const (
 	lineInfo
 	lineWarn
 	lineFail
+	lineUser
 )
 
 type line struct {
@@ -64,12 +77,21 @@ type line struct {
 
 // model is the whole state of the interface.
 type model struct {
-	session *Session
-	spin    spinner.Model
-	view    viewport.Model
-	ready   bool
-	width   int
-	height  int
+	theme     theme
+	session   *Session
+	actions   Actions
+	autostart func(context.Context) error
+
+	spin   spinner.Model
+	view   viewport.Model
+	prompt textarea.Model
+	ready  bool
+	width  int
+	height int
+
+	mode    mode
+	history []string
+	recall  int
 
 	projectDir  string
 	requirement string
@@ -87,34 +109,60 @@ type model struct {
 	fixes          int
 	maxFixes       int
 
-	lines    []line
-	files    map[pane]string
-	pane     pane
-	follow   bool
-	paused   bool
-	finished bool
-	runErr   error
-
-	confirmQuit bool
+	lines  []line
+	files  map[pane]string
+	pane   pane
+	follow bool
+	paused bool
+	runErr error
 }
 
-func newModel(session *Session) *model {
+func newModel(session *Session, actions Actions) *model {
+	palette := newTheme()
+
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
-	spin.Style = styleAccent
+	spin.Style = palette.accent
+
+	prompt := textarea.New()
+	prompt.Placeholder = "o que você quer construir?  (enter envia · /help)"
+	prompt.ShowLineNumbers = false
+	prompt.CharLimit = 4000
+	prompt.SetHeight(3)
+	prompt.Prompt = "  "
+	prompt.Focus()
 
 	return &model{
-		session:   session,
-		spin:      spin,
-		files:     map[pane]string{},
-		follow:    true,
-		startedAt: time.Now(),
+		theme:      palette,
+		session:    session,
+		actions:    actions,
+		projectDir: session.project,
+		spin:       spin,
+		prompt:     prompt,
+		files:      map[pane]string{},
+		follow:     true,
+		recall:     -1,
+		startedAt:  time.Now(),
 	}
 }
 
-// Init starts the spinner and the one-second clock that keeps timers honest.
+// Init starts the spinner, the one-second clock, and whatever the command
+// line asked to run right away.
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.spin.Tick, everySecond())
+	cmds := []tea.Cmd{m.spin.Tick, everySecond(), textarea.Blink}
+	if m.autostart != nil {
+		cmds = append(cmds, m.begin(m.autostart))
+	}
+	return tea.Batch(cmds...)
+}
+
+// begin puts the interface in running mode and dispatches one action.
+func (m *model) begin(action func(context.Context) error) tea.Cmd {
+	m.mode = modeRunning
+	m.runErr = nil
+	m.prompt.Blur()
+	m.follow = true
+	return m.session.dispatch(action)
 }
 
 func everySecond() tea.Cmd {
@@ -141,15 +189,16 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.refresh()
 		return m, nil
 
-	case finishedMsg:
-		m.finished = true
+	case runDoneMsg:
+		m.mode = modeIdle
 		m.active = false
+		m.paused = false
 		if typed.err != nil && m.runErr == nil {
 			m.runErr = typed.err
 			m.append(line{kind: lineFail, text: typed.err.Error()})
 		}
 		m.refresh()
-		return m, nil
+		return m, m.prompt.Focus()
 
 	case fileMsg:
 		m.files[typed.pane] = typed.content
@@ -164,49 +213,56 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.confirmQuit {
-		switch key.String() {
-		case "q", "ctrl+c", "y", "enter":
-			return m, tea.Quit
-		default:
-			m.confirmQuit = false
-			m.refresh()
+	switch key.String() {
+	case "ctrl+c":
+		// While the agents work, the first interrupt stops the run, not the
+		// session: the next request can be typed right away.
+		if m.mode == modeRunning {
+			m.interrupt()
 			return m, nil
 		}
-	}
+		return m, tea.Quit
 
-	switch key.String() {
-	case "q", "ctrl+c", "esc":
-		if m.finished {
-			return m, tea.Quit
+	case "ctrl+d":
+		return m, tea.Quit
+
+	case "esc":
+		if m.mode == modeRunning {
+			m.interrupt()
+			return m, nil
 		}
-		m.confirmQuit = true
-		m.refresh()
+		m.prompt.Reset()
+		m.recall = -1
 		return m, nil
 
-	case "tab", "right", "l":
+	case "tab":
 		return m, m.selectPane((m.pane + 1) % 3)
 
-	case "shift+tab", "left", "h":
+	case "shift+tab":
 		return m, m.selectPane((m.pane + 2) % 3)
 
-	case "1":
-		return m, m.selectPane(paneLive)
-	case "2":
-		return m, m.selectPane(panePlan)
-	case "3":
-		return m, m.selectPane(paneReview)
+	case "pgup", "pgdown":
+		return m, m.scroll(key)
+	}
 
+	if m.mode == modeRunning {
+		return m.handleRunningKey(key)
+	}
+	return m.handleIdleKey(key)
+}
+
+// handleRunningKey drives the panels while the agents work. The prompt is
+// blurred, so single letters are controls instead of text.
+func (m *model) handleRunningKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
 	case "p":
-		if !m.finished {
-			m.paused = m.session.togglePause()
-			if m.paused {
-				m.append(line{kind: lineInfo, text: "paused: the loop stops before the next dispatch"})
-			} else {
-				m.append(line{kind: lineInfo, text: "resumed"})
-			}
-			m.refresh()
+		m.paused = m.session.togglePause()
+		if m.paused {
+			m.append(line{kind: lineInfo, text: "pausado: o laço para antes do próximo despacho"})
+		} else {
+			m.append(line{kind: lineInfo, text: "retomado"})
 		}
+		m.refresh()
 		return m, nil
 
 	case "f":
@@ -228,15 +284,137 @@ func (m *model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.view.GotoBottom()
 		m.follow = true
 		return m, nil
+
+	case "1":
+		return m, m.selectPane(paneLive)
+	case "2":
+		return m, m.selectPane(panePlan)
+	case "3":
+		return m, m.selectPane(paneReview)
 	}
 
-	previous := m.view.YOffset
+	return m, m.scroll(key)
+}
+
+// handleIdleKey feeds the prompt, with history under the arrow keys.
+func (m *model) handleIdleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
+	case "enter":
+		return m.submit()
+
+	case "up":
+		if m.canRecall() {
+			m.recallHistory(1)
+			return m, nil
+		}
+
+	case "down":
+		if m.recall >= 0 {
+			m.recallHistory(-1)
+			return m, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	m.prompt, cmd = m.prompt.Update(key)
+	return m, cmd
+}
+
+// submit turns whatever was typed into a run or a command.
+func (m *model) submit() (tea.Model, tea.Cmd) {
+	typed := strings.TrimSpace(m.prompt.Value())
+	if typed == "" {
+		return m, nil
+	}
+	m.prompt.Reset()
+	m.recall = -1
+
+	if strings.HasPrefix(typed, "/") {
+		return m.runCommand(typed)
+	}
+
+	m.history = append(m.history, typed)
+	m.append(line{kind: lineUser, text: typed})
+	m.requirement = typed
+	m.resetRun()
+	m.refresh()
+
+	requirement := typed
+	return m, m.begin(func(ctx context.Context) error {
+		return m.actions.Start(ctx, requirement)
+	})
+}
+
+// runCommand handles the slash commands of the prompt.
+func (m *model) runCommand(typed string) (tea.Model, tea.Cmd) {
+	switch strings.ToLower(strings.Fields(typed)[0]) {
+	case "/continue", "/c":
+		if m.actions.Continue == nil {
+			m.append(line{kind: lineWarn, text: "nada para retomar"})
+			m.refresh()
+			return m, nil
+		}
+		m.append(line{kind: lineUser, text: "/continue"})
+		m.resetRun()
+		m.refresh()
+		return m, m.begin(m.actions.Continue)
+
+	case "/help", "/?":
+		for _, help := range []string{
+			"digite o que você quer construir e envie com enter",
+			"/continue  retoma o ciclo já registrado no projeto",
+			"/quit      sai do maestro",
+			"durante a execução: esc interrompe · p pausa · tab troca painel",
+		} {
+			m.append(line{kind: lineInfo, text: help})
+		}
+		m.refresh()
+		return m, nil
+
+	case "/quit", "/exit", "/q":
+		return m, tea.Quit
+
+	default:
+		m.append(line{kind: lineWarn, text: "comando desconhecido: " + typed})
+		m.refresh()
+		return m, nil
+	}
+}
+
+func (m *model) interrupt() {
+	m.session.interrupt()
+	m.append(line{kind: lineWarn, text: "interrompendo o agente…"})
+	m.refresh()
+}
+
+func (m *model) scroll(key tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
 	m.view, cmd = m.view.Update(key)
-	if m.view.YOffset != previous {
-		m.follow = m.view.AtBottom()
+	m.follow = m.view.AtBottom()
+	return cmd
+}
+
+func (m *model) canRecall() bool {
+	return len(m.history) > 0 && (m.recall >= 0 || strings.TrimSpace(m.prompt.Value()) == "")
+}
+
+// recallHistory walks the submitted requests, newest first.
+func (m *model) recallHistory(direction int) {
+	m.recall = min(max(m.recall+direction, -1), len(m.history)-1)
+	if m.recall < 0 {
+		m.prompt.Reset()
+		return
 	}
-	return m, cmd
+	m.prompt.SetValue(m.history[len(m.history)-1-m.recall])
+	m.prompt.CursorEnd()
+}
+
+// resetRun clears what belongs to the previous request.
+func (m *model) resetRun() {
+	m.steps, m.fixes = 0, 0
+	m.runErr = nil
+	m.startedAt = time.Now()
+	m.lines = append(m.lines, line{kind: lineSystem, text: strings.Repeat("─", 24)})
 }
 
 func (m *model) selectPane(target pane) tea.Cmd {
@@ -269,6 +447,9 @@ func (m *model) loadPane(target pane) tea.Cmd {
 func (m *model) apply(published event.Event) {
 	switch typed := published.(type) {
 	case event.RunStarted:
+		// Events alone are enough to know a run is under way, even when the
+		// interface did not dispatch it itself.
+		m.mode = modeRunning
 		m.projectDir = typed.ProjectDir
 		m.logPath = typed.LogPath
 		m.maxSteps = typed.MaxSteps
@@ -279,13 +460,14 @@ func (m *model) apply(published event.Event) {
 		if !typed.StartedAt.IsZero() {
 			m.startedAt = typed.StartedAt
 		}
-		m.append(line{kind: lineSystem, text: "run started in " + typed.ProjectDir})
+		m.append(line{kind: lineSystem, text: "execução iniciada em " + typed.ProjectDir})
 
 	case event.BoardUpdated:
 		m.state = typed.State
 		m.board = typed.Board
 
 	case event.AgentStarted:
+		m.mode = modeRunning
 		m.current = typed.Assignment
 		m.active = true
 		m.agentStartedAt = time.Now()
@@ -297,7 +479,7 @@ func (m *model) apply(published event.Event) {
 		m.append(line{
 			kind: lineSystem,
 			role: typed.Assignment.Role,
-			text: "── " + typed.Assignment.String() + " · phase " + typed.State.Phase.String() + " ──",
+			text: "── " + typed.Assignment.String() + " · fase " + typed.State.Phase.String() + " ──",
 		})
 
 	case event.AgentOutput:
@@ -308,7 +490,7 @@ func (m *model) apply(published event.Event) {
 		m.append(line{
 			kind: lineSystem,
 			role: typed.Assignment.Role,
-			text: typed.Assignment.String() + " finished in " + typed.Result.Duration.Round(time.Second).String(),
+			text: typed.Assignment.String() + " terminou em " + typed.Result.Duration.Round(time.Second).String(),
 		})
 
 	case event.PhaseChanged:
@@ -331,7 +513,6 @@ func (m *model) apply(published event.Event) {
 		m.append(line{kind: kind, text: typed.Message})
 
 	case event.RunFinished:
-		m.finished = true
 		m.active = false
 		m.steps = typed.Steps
 		m.fixes = typed.Fixes

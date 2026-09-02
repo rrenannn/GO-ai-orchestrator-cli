@@ -32,55 +32,79 @@ make install    # instala em $GOPATH/bin
 ## Uso
 
 ```sh
-# 1. prepara o projeto alvo (instruções dos agentes + artefatos .agent/)
-maestro init /caminho/do/projeto
-
-# 2. dispara uma feature: planeja, implementa, valida, revisa e corrige
-maestro start /caminho/do/projeto "Adicionar rate limiting por tenant"
-
-# 3. consulta o estado a qualquer momento
-maestro status /caminho/do/projeto
-
-# 4. retoma de onde parou (após corrigir algo à mão, por exemplo)
-maestro cycle /caminho/do/projeto
+cd /caminho/do/projeto
+maestro
 ```
 
-O diretório do projeto é opcional em todos os comandos: sem ele, vale o
-diretório atual.
+Só isso. A sessão abre, prepara o projeto se for a primeira vez, e espera você
+descrever o que quer construir — como um CLI de chat, mas do outro lado estão
+dois agentes se revezando.
+
+```text
+› adicionar rate limiting por tenant
+```
+
+Enter e o maestro assume: Claude planeja, Codex implementa e valida, Claude
+revisa, Codex corrige o que a revisão apontou, Claude escolhe a próxima tarefa.
+Quando o ciclo termina, o prompt volta para o próximo pedido.
+
+Para roteiro, CI ou script, os comandos diretos continuam:
+
+```sh
+maestro init /projeto                          # só prepara os arquivos
+maestro start /projeto "Adicionar rate limit"  # um pedido, direto
+maestro status /projeto                        # em que fase está
+maestro cycle /projeto                         # retoma de onde parou
+```
+
+O diretório do projeto é opcional em todos: sem ele, vale o diretório atual.
 
 ## A interface
-
-`start` e `cycle` abrem uma interface de tela cheia enquanto os agentes
-trabalham:
 
 ```text
 ╭─ maestro  ~/projetos/api                                    2m14s ─╮
 │ ✓ plan → ✓ build → ● review → ○ approved → ○ done      ↺ fixing    │
 ╰────────────────────────────────────────────────────────────────────╯
-╭ REQUEST                  ╮╭ Live · Plan · Review                   ╮
-│ Adicionar rate limiting  ││ ── builder (codex) · phase fixing ──   │
+╭ PEDIDO                   ╮╭ Live · Plan · Review                   ╮
+│ adicionar rate limiting  ││ ── builder (codex) · fase fixing ──    │
 │                          ││ ▏editando internal/http/limiter.go     │
-│ TASKS                    ││ ▏go test ./... ok                      │
+│ TAREFAS                  ││ ▏go test ./... ok                      │
 │ ✓ T1 add config loader   ││ → reviewing → fixing                   │
 │▸◐ T2 add rate limiter    ││                                        │
 │ ○ T3 document the API    ││                                        │
 │                          ││                                        │
-│ RUN                      ││                                        │
-│ steps  5/12              ││                                        │
-│ fixes  1/2               ││                                        │
+│ EXECUÇÃO                 ││                                        │
+│ passos     5/12          ││                                        │
+│ correções  1/2           ││                                        │
 ╰──────────────────────────╯╰────────────────────────────────────────╯
- RUNNING  ⣾  BUILDER via codex · 12s
- tab panes · p pause · f follow · r reload · q quit
+╭────────────────────────────────────────────────────────────────────╮
+│ os agentes estão trabalhando · esc interrompe                      │
+╰────────────────────────────────────────────────────────────────────╯
+ RODANDO  ⣾  BUILDER via codex · 12s
+ esc interromper · p pausar · f seguir · tab painéis · r recarregar
 ```
+
+No prompt (nada rodando):
 
 | Tecla | Ação |
 | --- | --- |
+| `enter` | envia o pedido e começa a orquestração |
+| `↑` `↓` | histórico dos pedidos já enviados |
+| `/continue` | retoma o ciclo já registrado no projeto, sem novo pedido |
+| `/help` `/quit` | ajuda e saída |
+| `esc` | limpa o que foi digitado |
+| `ctrl+c` `ctrl+d` | sai |
+
+Durante a execução:
+
+| Tecla | Ação |
+| --- | --- |
+| `esc` · `ctrl+c` | interrompe a execução; a sessão continua para o próximo pedido |
 | `tab` / `1` `2` `3` | alterna **Live** (transcrição), **Plan** (`.agent/PLAN.md`) e **Review** (`.agent/REVIEW.md`) |
 | `p` | pausa ou retoma: o laço para **antes** do próximo despacho, sem matar o agente em curso |
 | `f` · `g` · `G` | seguir a saída · ir ao topo · ir ao fim |
 | `↑` `↓` `PgUp` `PgDn` | rola o painel |
 | `r` | recarrega o arquivo do painel |
-| `q` | sai; com a execução em andamento, pede confirmação e então cancela o agente |
 
 A interface só aparece quando a saída é um terminal. Em pipe, redirecionamento
 ou CI, o `maestro` cai automaticamente na transcrição em texto — `--plain`
@@ -102,6 +126,7 @@ força esse modo, e `--dry-run` sempre usa ele.
 | --- | --- | --- |
 | `MAESTRO_CLAUDE_CMD` | `claude` | executável do Claude Code |
 | `MAESTRO_CODEX_CMD` | `codex` | executável do Codex |
+| `MAESTRO_BACKGROUND` | detectado | `dark` ou `light`; evita perguntar a cor de fundo ao terminal |
 
 ## Máquina de estados
 
@@ -125,7 +150,7 @@ Os agentes se comunicam por arquivos no projeto alvo, e não pelo processo:
 
 | Arquivo | Escrito por | Conteúdo |
 | --- | --- | --- |
-| `.agent/REQUEST.md` | maestro | requisito da feature |
+| `.agent/REQUEST.md` | maestro | o pedido que você digitou |
 | `.agent/PLAN.md` | arquiteto | abordagem, riscos e ordem das tarefas |
 | `.agent/TASKS.json` | arquiteto | tarefas atômicas com critérios e validação |
 | `.agent/REVIEW.md` | revisor | achados e veredito (`APPROVED` / `CHANGES REQUESTED`) |
@@ -142,7 +167,7 @@ Clean architecture, com a regra de dependência apontando sempre para dentro:
 ```text
 cmd/maestro               composition root: único lugar que conhece tudo
 internal/cli              delivery: flags, transcrição em texto
-internal/tui              delivery: interface ao vivo (Bubble Tea)
+internal/tui              delivery: sessão interativa (Bubble Tea)
 internal/app/usecase      regras de aplicação: o laço de orquestração
 internal/app/event        o que uma execução relata enquanto acontece
 internal/app/port         interfaces de saída (implementadas pela infra)
@@ -157,8 +182,11 @@ internal/infra            adapters: filesystem, processos, templates, relógio
 - `internal/infra/fsstate` — traduz `.agent/*` em modelo de domínio
 - `internal/infra/process` — executa os CLIs e transmite a saída
 
-O caso de uso não sabe desenhar nada: ele publica eventos na porta `Observer` e
-consulta a porta `Gate` antes de cada despacho. A transcrição em texto e a TUI
+O caso de uso não sabe desenhar nada nem ler teclado: ele publica eventos na
+porta `Observer` e consulta a porta `Gate` antes de cada despacho. A sessão
+interativa é quem decide *quando* chamar cada caso de uso — o que você digita
+vira `Start`, `/continue` vira `Cycle`, e `esc` cancela o contexto daquela
+execução sem derrubar a sessão. A transcrição em texto e a TUI
 são duas implementações dessas portas — por isso a interface pode mudar por
 completo sem tocar em uma linha de regra.
 

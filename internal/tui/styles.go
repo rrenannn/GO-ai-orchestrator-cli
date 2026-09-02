@@ -8,7 +8,8 @@ import (
 )
 
 // Palette. Adaptive colors keep the interface readable on light and dark
-// terminals without asking the operator to configure anything.
+// terminals without asking the operator to configure anything. These are
+// plain values: nothing here touches the terminal.
 var (
 	colorAccent = lipgloss.AdaptiveColor{Light: "#5B3FD9", Dark: "#A98BFF"}
 	colorText   = lipgloss.AdaptiveColor{Light: "#1F2328", Dark: "#E6E6E6"}
@@ -23,48 +24,90 @@ var (
 	colorReviewer  = lipgloss.AdaptiveColor{Light: "#9A6700", Dark: "#D29922"}
 )
 
-var (
-	styleApp      = lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
-	styleTitle    = lipgloss.NewStyle().Bold(true).Foreground(colorText)
-	styleMuted    = lipgloss.NewStyle().Foreground(colorMuted)
-	styleOK       = lipgloss.NewStyle().Foreground(colorOK)
-	styleWarn     = lipgloss.NewStyle().Foreground(colorWarn)
-	styleError    = lipgloss.NewStyle().Foreground(colorError)
-	styleAccent   = lipgloss.NewStyle().Foreground(colorAccent)
-	stylePanel    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorBorder).Padding(0, 1)
-	styleTabOn    = lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Underline(true)
-	styleTabOff   = lipgloss.NewStyle().Foreground(colorMuted)
-	styleKey      = lipgloss.NewStyle().Bold(true).Foreground(colorText)
-	styleBadgeRun = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorAccent).Padding(0, 1)
-	styleBadgeOK  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorOK).Padding(0, 1)
-	styleBadgeErr = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorError).Padding(0, 1)
-	styleBadgePau = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#1F2328")).Background(colorWarn).Padding(0, 1)
-)
+// theme holds every style of the interface. It is built when the interface
+// starts, never at package initialization: creating a lipgloss style makes it
+// inspect the terminal, and commands without an interface must not do that.
+type theme struct {
+	app    lipgloss.Style
+	title  lipgloss.Style
+	muted  lipgloss.Style
+	ok     lipgloss.Style
+	warn   lipgloss.Style
+	fail   lipgloss.Style
+	accent lipgloss.Style
+	user   lipgloss.Style
+	key    lipgloss.Style
 
-// roleStyle colors an agent by the role it plays.
-func roleStyle(role agent.Role) lipgloss.Style {
-	switch role {
-	case agent.RoleArchitect:
-		return lipgloss.NewStyle().Bold(true).Foreground(colorArchitect)
-	case agent.RoleBuilder:
-		return lipgloss.NewStyle().Bold(true).Foreground(colorBuilder)
-	case agent.RoleReviewer:
-		return lipgloss.NewStyle().Bold(true).Foreground(colorReviewer)
-	default:
-		return styleMuted
+	panel  lipgloss.Style
+	tabOn  lipgloss.Style
+	tabOff lipgloss.Style
+
+	badgeRunning lipgloss.Style
+	badgeDone    lipgloss.Style
+	badgeFailed  lipgloss.Style
+	badgePaused  lipgloss.Style
+	badgeIdle    lipgloss.Style
+
+	architect lipgloss.Style
+	builder   lipgloss.Style
+	reviewer  lipgloss.Style
+}
+
+func newTheme() theme {
+	badge := lipgloss.NewStyle().Bold(true).Padding(0, 1)
+	white := lipgloss.Color("#FFFFFF")
+
+	return theme{
+		app:    lipgloss.NewStyle().Bold(true).Foreground(colorAccent),
+		title:  lipgloss.NewStyle().Bold(true).Foreground(colorText),
+		muted:  lipgloss.NewStyle().Foreground(colorMuted),
+		ok:     lipgloss.NewStyle().Foreground(colorOK),
+		warn:   lipgloss.NewStyle().Foreground(colorWarn),
+		fail:   lipgloss.NewStyle().Foreground(colorError),
+		accent: lipgloss.NewStyle().Foreground(colorAccent),
+		user:   lipgloss.NewStyle().Bold(true).Foreground(colorAccent),
+		key:    lipgloss.NewStyle().Bold(true).Foreground(colorText),
+
+		panel:  lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorBorder).Padding(0, 1),
+		tabOn:  lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Underline(true),
+		tabOff: lipgloss.NewStyle().Foreground(colorMuted),
+
+		badgeRunning: badge.Foreground(white).Background(colorAccent),
+		badgeDone:    badge.Foreground(white).Background(colorOK),
+		badgeFailed:  badge.Foreground(white).Background(colorError),
+		badgePaused:  badge.Foreground(lipgloss.Color("#1F2328")).Background(colorWarn),
+		badgeIdle:    badge.Foreground(colorText).Background(colorBorder),
+
+		architect: lipgloss.NewStyle().Bold(true).Foreground(colorArchitect),
+		builder:   lipgloss.NewStyle().Bold(true).Foreground(colorBuilder),
+		reviewer:  lipgloss.NewStyle().Bold(true).Foreground(colorReviewer),
 	}
 }
 
-// taskGlyph renders the status of a task as a single character.
-func taskGlyph(status task.Status) (string, lipgloss.Style) {
+// role colors an agent by the role it plays.
+func (t theme) role(role agent.Role) lipgloss.Style {
+	switch role {
+	case agent.RoleArchitect:
+		return t.architect
+	case agent.RoleBuilder:
+		return t.builder
+	case agent.RoleReviewer:
+		return t.reviewer
+	default:
+		return t.muted
+	}
+}
+
+// glyph renders the status of a task as a single character.
+func (t theme) glyph(status task.Status) (string, lipgloss.Style) {
 	switch status {
 	case task.StatusApproved:
-		return "✓", styleOK
+		return "✓", t.ok
 	case task.StatusImplementing, task.StatusReviewing:
-		return "◐", styleAccent
+		return "◐", t.accent
 	case task.StatusBlocked:
-		return "⊘", styleError
+		return "⊘", t.fail
 	default:
-		return "○", styleMuted
+		return "○", t.muted
 	}
 }

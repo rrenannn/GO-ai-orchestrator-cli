@@ -118,3 +118,26 @@ func TestVersion(t *testing.T) {
 		t.Fatalf("unexpected version output: %s", stdout)
 	}
 }
+
+func TestInteractiveSessionNeedsATerminal(t *testing.T) {
+	t.Parallel()
+
+	app, _, stderr := newApp(t)
+	ctx := context.Background()
+
+	// newApp builds the CLI with interactive=false, like a pipe or a CI job.
+	if code := app.Run(ctx, nil); code != cli.ExitUsage {
+		t.Fatalf("want a usage exit, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "--plain") {
+		t.Fatalf("the error must point at the scriptable form:\n%s", stderr)
+	}
+
+	stderr.Reset()
+	if code := app.Run(ctx, []string{"run", t.TempDir()}); code != cli.ExitUsage {
+		t.Fatalf("want a usage exit, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "precisa de um terminal") {
+		t.Fatalf("unexpected stderr:\n%s", stderr)
+	}
+}

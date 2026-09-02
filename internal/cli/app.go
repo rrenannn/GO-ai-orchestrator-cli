@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/GO-ai-orchestrator-cli/internal/app/event"
 	"github.com/GO-ai-orchestrator-cli/internal/app/port"
 	"github.com/GO-ai-orchestrator-cli/internal/app/usecase"
 	"github.com/GO-ai-orchestrator-cli/internal/domain/task"
@@ -51,15 +52,18 @@ func New(container Container, stdout, stderr io.Writer, version string, interact
 
 // Run executes one command and returns the process exit code.
 func (a *App) Run(ctx context.Context, args []string) int {
+	// No command opens the interactive session, the way maestro is meant to
+	// be used: you type what you want built and it orchestrates.
 	if len(args) == 0 {
-		fmt.Fprint(a.stderr, usageText)
-		return ExitUsage
+		return a.report(a.runInteractive(ctx, nil))
 	}
 
 	command, rest := args[0], args[1:]
 
 	var err error
 	switch command {
+	case "run":
+		err = a.runInteractive(ctx, rest)
 	case "init":
 		err = a.runInit(rest)
 	case "start":
@@ -154,8 +158,8 @@ func (a *App) runStart(ctx context.Context, args []string) error {
 	}
 	run.input.ProjectDir = projectDir
 
-	return a.execute(ctx, run, func(ctx context.Context, input usecase.CycleInput) (usecase.CycleOutput, error) {
-		return a.container.Start.Execute(ctx, usecase.StartInput{Cycle: input, Requirement: requirement})
+	return a.execute(ctx, run, func(actions tui.Actions) func(context.Context) error {
+		return func(ctx context.Context) error { return actions.Start(ctx, requirement) }
 	})
 }
 
@@ -172,35 +176,99 @@ func (a *App) runCycle(ctx context.Context, args []string) error {
 	}
 	run.input.ProjectDir = projectDir
 
-	return a.execute(ctx, run, a.container.Cycle.Execute)
+	return a.execute(ctx, run, func(actions tui.Actions) func(context.Context) error {
+		return actions.Continue
+	})
 }
 
 // execute runs a use case under the presentation the operator asked for.
-func (a *App) execute(
-	ctx context.Context,
-	run *runFlags,
-	invoke func(context.Context, usecase.CycleInput) (usecase.CycleOutput, error),
-) error {
-	// The plain transcript already closes with the outcome of the run.
+func (a *App) execute(ctx context.Context, run *runFlags, autostart func(tui.Actions) func(context.Context) error) error {
+	// The plain transcript is one-shot and closes with the outcome of the run.
 	if run.plain || !a.interactive || run.input.DryRun {
 		run.input.Observer = NewPlainRenderer(a.stdout)
-		_, err := invoke(ctx, run.input)
+		return autostart(a.actions(run))(ctx)
+	}
+	return a.session(ctx, run, autostart)
+}
+
+// session opens the interactive interface, optionally starting one run.
+func (a *App) session(ctx context.Context, run *runFlags, autostart func(tui.Actions) func(context.Context) error) error {
+	live := tui.NewSession(run.input.ProjectDir)
+	run.input.Observer = live
+	run.input.Gate = live
+
+	actions := a.actions(run)
+	var first func(context.Context) error
+	if autostart != nil {
+		first = autostart(actions)
+	}
+	return live.Run(ctx, actions, first)
+}
+
+// actions binds the interface vocabulary to the use cases.
+func (a *App) actions(run *runFlags) tui.Actions {
+	return tui.Actions{
+		Start: func(ctx context.Context, requirement string) error {
+			_, err := a.container.Start.Execute(ctx, usecase.StartInput{Cycle: run.input, Requirement: requirement})
+			return err
+		},
+		Continue: func(ctx context.Context) error {
+			_, err := a.container.Cycle.Execute(ctx, run.input)
+			return err
+		},
+	}
+}
+
+// runInteractive opens a session with an empty prompt, preparing the project
+// first so the operator never has to know about the .agent files.
+func (a *App) runInteractive(ctx context.Context, args []string) error {
+	flags := a.newFlagSet("run")
+	run := bindRunFlags(flags)
+	if err := flags.Parse(args); err != nil {
 		return err
 	}
 
-	session := tui.NewSession()
-	run.input.Observer = session
-	run.input.Gate = session
+	projectDir, err := projectArg(flags.Args(), 0)
+	if err != nil {
+		return err
+	}
+	run.input.ProjectDir = projectDir
 
-	var output usecase.CycleOutput
-	err := session.Run(ctx, func(ctx context.Context) error {
-		var runErr error
-		output, runErr = invoke(ctx, run.input)
-		return runErr
-	})
-	// The interface took over the screen; leave the outcome in the scrollback.
-	a.printRunSummary(output)
-	return err
+	if !a.interactive {
+		return fmt.Errorf("%w: o modo interativo precisa de um terminal; use `maestro start %s \"<requisito>\" --plain`", errUsage, projectDir)
+	}
+
+	live := tui.NewSession(run.input.ProjectDir)
+	run.input.Observer = live
+	run.input.Gate = live
+
+	if err := a.prepare(projectDir, live); err != nil {
+		return err
+	}
+	return live.Run(ctx, a.actions(run), nil)
+}
+
+// prepare installs whatever the project is missing and says what it did.
+func (a *App) prepare(projectDir string, live *tui.Session) error {
+	output, err := a.container.Initialize.Execute(usecase.InitializeInput{ProjectDir: projectDir})
+	if err != nil {
+		return err
+	}
+
+	installed := make([]string, 0, len(output.Files))
+	for _, file := range output.Files {
+		if file.Action == port.FileInstalled {
+			installed = append(installed, file.Path)
+		}
+	}
+	live.Publish(event.Notice{Level: event.LevelInfo, Message: "projeto: " + projectDir})
+	if len(installed) > 0 {
+		live.Publish(event.Notice{
+			Level:   event.LevelInfo,
+			Message: "arquivos criados: " + strings.Join(installed, ", "),
+		})
+	}
+	return nil
 }
 
 func (a *App) runStatus(args []string) error {
@@ -239,14 +307,6 @@ func (a *App) runStatus(args []string) error {
 		}
 	}
 	return nil
-}
-
-func (a *App) printRunSummary(output usecase.CycleOutput) {
-	if output.LogPath == "" {
-		return
-	}
-	fmt.Fprintf(a.stdout, "\nfase=%s passos=%d correções=%d\nlog: %s\n",
-		output.FinalState.Phase, output.Steps, output.Fixes, output.LogPath)
 }
 
 func (a *App) newFlagSet(name string) *flag.FlagSet {

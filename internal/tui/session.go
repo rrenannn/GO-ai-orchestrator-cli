@@ -1,37 +1,72 @@
-// Package tui renders an orchestration run as a live terminal interface.
-// It is a delivery adapter: it implements the Observer and Gate ports and
-// knows nothing about how the workflow decides anything.
+// Package tui renders an orchestration run as a live terminal interface where
+// the operator types what they want built. It is a delivery adapter: it
+// implements the Observer and Gate ports and knows nothing about how the
+// workflow decides anything.
 package tui
 
 import (
 	"context"
+	"os"
+	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GO-ai-orchestrator-cli/internal/app/event"
 )
 
-// eventBuffer absorbs bursts of agent output without ever blocking the run.
+// eventBuffer absorbs bursts of agent output without ever blocking a run.
 const eventBuffer = 8192
 
-// Session bridges a running use case and the Bubble Tea program: it receives
-// events from the orchestration goroutine and holds the pause switch.
-type Session struct {
-	events chan event.Event
-
-	mu      sync.Mutex
-	paused  bool
-	resume  chan struct{}
-	dropped int
-	workErr error
+// Actions are the use cases the interface can trigger. The interface decides
+// when; the application decides what each one does.
+type Actions struct {
+	// Start records a new request and drives it from planning.
+	Start func(ctx context.Context, requirement string) error
+	// Continue resumes the workflow already recorded in the project.
+	Continue func(ctx context.Context) error
 }
 
-// NewSession creates an idle session.
-func NewSession() *Session {
+// Session bridges the running use cases and the Bubble Tea program: it carries
+// events one way, holds the pause switch, and hands out the context each run
+// is cancelled with.
+type Session struct {
+	project string
+	events  chan event.Event
+
+	mu        sync.Mutex
+	base      context.Context
+	paused    bool
+	resume    chan struct{}
+	dropped   int
+	cancelRun context.CancelFunc
+	running   sync.WaitGroup
+}
+
+// settlePalette resolves the terminal colors once, before the program owns
+// stdin, and caches the answer so nothing queries the terminal mid-render:
+// a late reply to that query is read as if the operator had typed it.
+//
+// MAESTRO_BACKGROUND=dark|light skips the query altogether, for terminals
+// that answer it badly.
+func settlePalette() {
+	lipgloss.SetColorProfile(lipgloss.ColorProfile())
+
+	if declared, ok := os.LookupEnv("MAESTRO_BACKGROUND"); ok {
+		lipgloss.SetHasDarkBackground(!strings.EqualFold(strings.TrimSpace(declared), "light"))
+		return
+	}
+	lipgloss.SetHasDarkBackground(lipgloss.HasDarkBackground())
+}
+
+// NewSession creates an idle session for a project.
+func NewSession(project string) *Session {
 	return &Session{
-		events: make(chan event.Event, eventBuffer),
-		resume: make(chan struct{}),
+		project: project,
+		events:  make(chan event.Event, eventBuffer),
+		resume:  make(chan struct{}),
+		base:    context.Background(),
 	}
 }
 
@@ -85,50 +120,70 @@ func (s *Session) droppedLines() int {
 	return s.dropped
 }
 
-// Run paints the interface while work runs, and keeps it open afterwards so
-// the operator can read the outcome. It returns the error of the work.
-func (s *Session) Run(ctx context.Context, work func(context.Context) error) error {
-	workCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	program := tea.NewProgram(newModel(s), tea.WithAltScreen(), tea.WithContext(ctx))
-
-	worked := make(chan struct{})
-	go func() {
-		defer close(worked)
-		err := work(workCtx)
-
-		s.mu.Lock()
-		s.workErr = err
-		s.mu.Unlock()
-		close(s.events)
-	}()
-
-	// Forwarding through one channel keeps the last events of a run ahead of
-	// the message that announces its end.
-	go func() {
-		for published := range s.events {
-			program.Send(eventMsg{published})
-		}
-		s.mu.Lock()
-		err := s.workErr
-		s.mu.Unlock()
-		program.Send(finishedMsg{err: err})
-	}()
-
-	_, runErr := program.Run()
-
-	// Quitting the interface stops the run: the agent process is killed with
-	// the context, and we wait for it to be reaped before returning.
-	cancel()
-	<-worked
-
+// dispatch starts one run in the background and reports its outcome back to
+// the interface. Each run gets its own context, so interrupting a run leaves
+// the session alive for the next request.
+func (s *Session) dispatch(action func(context.Context) error) tea.Cmd {
 	s.mu.Lock()
-	workErr := s.workErr
+	ctx, cancel := context.WithCancel(s.base)
+	s.cancelRun = cancel
 	s.mu.Unlock()
 
-	if workErr != nil {
-		return workErr
+	s.running.Add(1)
+	return func() tea.Msg {
+		defer s.running.Done()
+		defer cancel()
+		return runDoneMsg{err: action(ctx)}
 	}
-	return runErr
+}
+
+// interrupt cancels the run in flight, if any. The agent process dies with
+// the context; the session stays up.
+func (s *Session) interrupt() {
+	s.mu.Lock()
+	cancel := s.cancelRun
+	s.cancelRun = nil
+	s.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// Run opens the interface and keeps it alive until the operator leaves.
+// autostart, when set, is dispatched as soon as the interface is up, which is
+// how `maestro start "..."` and `maestro cycle` enter the same session.
+func (s *Session) Run(ctx context.Context, actions Actions, autostart func(context.Context) error) error {
+	s.mu.Lock()
+	s.base = ctx
+	s.mu.Unlock()
+
+	settlePalette()
+
+	model := newModel(s, actions)
+	model.autostart = autostart
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
+
+	closed := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case published := <-s.events:
+				program.Send(eventMsg{published})
+			case <-closed:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	_, err := program.Run()
+
+	// Leaving the interface stops whatever was running and waits for the
+	// agent process to be reaped before the command returns.
+	close(closed)
+	s.interrupt()
+	s.running.Wait()
+	return err
 }

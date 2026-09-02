@@ -13,6 +13,7 @@ import (
 // Fixed chrome heights, in terminal rows.
 const (
 	headerHeight = 4
+	promptHeight = 5
 	footerHeight = 2
 )
 
@@ -37,14 +38,14 @@ var phaseLabels = map[workflow.Phase]string{
 // View renders the whole interface.
 func (m *model) View() string {
 	if !m.ready {
-		return styleMuted.Render("starting maestro…")
+		return m.theme.muted.Render("iniciando o maestro…")
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, m.renderTasks(), m.renderStream())
-	return lipgloss.JoinVertical(lipgloss.Left, m.renderHeader(), body, m.renderFooter())
+	return lipgloss.JoinVertical(lipgloss.Left, m.renderHeader(), body, m.renderPrompt(), m.renderFooter())
 }
 
 func (m *model) bodyHeight() int {
-	return max(m.height-headerHeight-footerHeight, 6)
+	return max(m.height-headerHeight-promptHeight-footerHeight, 6)
 }
 
 func (m *model) leftWidth() int {
@@ -62,18 +63,18 @@ func (m *model) viewportSize() (int, int) {
 func (m *model) renderHeader() string {
 	project := m.projectDir
 	if project == "" {
-		project = "no project"
+		project = "nenhum projeto"
 	}
 	title := lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		styleApp.Render("maestro"),
-		styleMuted.Render("  "+shorten(project, max(m.width/2, 20))),
+		m.theme.app.Render("maestro"),
+		m.theme.muted.Render("  "+shorten(project, max(m.width/2, 20))),
 	)
-	clock := styleMuted.Render(format(m.elapsed()))
+	clock := m.theme.muted.Render(format(m.elapsed()))
 	gap := max(m.width-4-lipgloss.Width(title)-lipgloss.Width(clock), 1)
 
 	head := title + strings.Repeat(" ", gap) + clock
-	return stylePanel.Width(m.width - 2).Render(head + "\n" + m.renderPipeline())
+	return m.theme.panel.Width(m.width - 2).Render(head + "\n" + m.renderPipeline())
 }
 
 // renderPipeline draws where the workflow is, at a glance.
@@ -86,19 +87,19 @@ func (m *model) renderPipeline() string {
 
 	segments := make([]string, 0, len(pipeline))
 	for index, phase := range pipeline {
-		glyph, style := "○", styleMuted
+		glyph, style := "○", m.theme.muted
 		switch {
 		case index < currentIndex:
-			glyph, style = "✓", styleOK
+			glyph, style = "✓", m.theme.ok
 		case index == currentIndex:
-			glyph, style = "●", styleAccent
+			glyph, style = "●", m.theme.accent
 		}
 		segments = append(segments, style.Render(glyph+" "+phaseLabels[phase]))
 	}
 
-	rendered := strings.Join(segments, styleMuted.Render(" → "))
+	rendered := strings.Join(segments, m.theme.muted.Render(" → "))
 	if fixing {
-		rendered += styleWarn.Render("   ↺ fixing")
+		rendered += m.theme.warn.Render("   ↺ fixing")
 	}
 	return rendered
 }
@@ -111,60 +112,60 @@ func (m *model) renderTasks() string {
 
 	if m.requirement != "" {
 		sections = append(sections,
-			styleTitle.Render("REQUEST"),
+			m.theme.title.Render("PEDIDO"),
 			lipgloss.NewStyle().Width(inner).Foreground(colorText).Render(m.requirement),
 			"",
 		)
 	}
 
-	sections = append(sections, styleTitle.Render("TASKS"))
+	sections = append(sections, m.theme.title.Render("TAREFAS"))
 	if len(m.board.Tasks) == 0 {
-		sections = append(sections, styleMuted.Render("waiting for the plan…"))
+		sections = append(sections, m.theme.muted.Render("aguardando o plano…"))
 	}
 	for _, item := range m.board.Tasks {
-		glyph, style := taskGlyph(item.Status)
+		glyph, style := m.theme.glyph(item.Status)
 		marker := " "
 		if item.ID == m.state.TaskID {
-			marker = styleAccent.Render("▸")
+			marker = m.theme.accent.Render("▸")
 		}
 		label := shorten(item.ID+" "+item.Objective, inner-3)
 		if item.ID == m.state.TaskID {
-			label = styleTitle.Render(label)
+			label = m.theme.title.Render(label)
 		}
 		sections = append(sections, marker+style.Render(glyph)+" "+label)
 	}
 
-	sections = append(sections, "", styleTitle.Render("RUN"))
+	sections = append(sections, "", m.theme.title.Render("EXECUÇÃO"))
 	sections = append(sections,
-		styleMuted.Render(fmt.Sprintf("steps  %d/%d", m.steps, m.maxSteps)),
-		styleMuted.Render(fmt.Sprintf("fixes  %d/%d", m.fixes, m.maxFixes)),
-		styleMuted.Render("task   "+orDash(m.state.TaskID)),
+		m.theme.muted.Render(fmt.Sprintf("passos     %d/%d", m.steps, m.maxSteps)),
+		m.theme.muted.Render(fmt.Sprintf("correções  %d/%d", m.fixes, m.maxFixes)),
+		m.theme.muted.Render("tarefa     "+orDash(m.state.TaskID)),
 	)
 	if dropped := m.session.droppedLines(); dropped > 0 {
-		sections = append(sections, styleWarn.Render(fmt.Sprintf("%d lines dropped", dropped)))
+		sections = append(sections, m.theme.warn.Render(fmt.Sprintf("%d linhas descartadas", dropped)))
 	}
 
-	return stylePanel.Width(width - 2).Height(m.bodyHeight() - 2).Render(strings.Join(sections, "\n"))
+	return m.theme.panel.Width(width - 2).Height(m.bodyHeight() - 2).Render(strings.Join(sections, "\n"))
 }
 
 // renderStream is the right panel: live transcript, plan or review.
 func (m *model) renderStream() string {
 	tabs := make([]string, 0, len(paneNames))
 	for _, candidate := range []pane{paneLive, panePlan, paneReview} {
-		style := styleTabOff
+		style := m.theme.tabOff
 		if candidate == m.pane {
-			style = styleTabOn
+			style = m.theme.tabOn
 		}
 		tabs = append(tabs, style.Render(paneNames[candidate]))
 	}
 
-	head := strings.Join(tabs, styleMuted.Render(" · "))
+	head := strings.Join(tabs, m.theme.muted.Render(" · "))
 	if m.pane == paneLive && !m.follow {
-		head += styleWarn.Render("   (paused scroll · G to follow)")
+		head += m.theme.warn.Render("   (rolagem parada · G para seguir)")
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, head, "", m.view.View())
-	return stylePanel.Width(m.rightWidth() - 2).Height(m.bodyHeight() - 2).Render(content)
+	return m.theme.panel.Width(m.rightWidth() - 2).Height(m.bodyHeight() - 2).Render(content)
 }
 
 // paneContent renders whatever the selected pane shows.
@@ -174,13 +175,13 @@ func (m *model) paneContent() string {
 	if m.pane != paneLive {
 		content, ok := m.files[m.pane]
 		if !ok {
-			return styleMuted.Render("loading " + paneFiles[m.pane] + "…")
+			return m.theme.muted.Render("lendo " + paneFiles[m.pane] + "…")
 		}
 		return lipgloss.NewStyle().Width(width).Render(content)
 	}
 
 	if len(m.lines) == 0 {
-		return styleMuted.Render("waiting for the first agent…")
+		return m.theme.muted.Render("descreva um pedido para começar")
 	}
 
 	wrap := lipgloss.NewStyle().Width(width)
@@ -194,34 +195,55 @@ func (m *model) paneContent() string {
 func (m *model) renderLine(entry line) string {
 	switch entry.kind {
 	case lineSystem:
-		return roleStyle(entry.role).Render(entry.text)
+		return m.theme.role(entry.role).Render(entry.text)
 	case lineInfo:
-		return styleAccent.Render("→ ") + entry.text
+		return m.theme.accent.Render("→ ") + entry.text
 	case lineWarn:
-		return styleWarn.Render("! " + entry.text)
+		return m.theme.warn.Render("! " + entry.text)
 	case lineFail:
-		return styleError.Render("✗ " + entry.text)
+		return m.theme.fail.Render("✗ " + entry.text)
+	case lineUser:
+		return m.theme.user.Render("› " + entry.text)
 	default:
-		return roleStyle(entry.role).Render("▏") + entry.text
+		return m.theme.role(entry.role).Render("▏") + entry.text
 	}
 }
 
-// renderFooter carries the status badge, the running agent and the keys.
+// renderPrompt is where the operator says what they want built. It stays on
+// screen during a run, showing how to interrupt it.
+func (m *model) renderPrompt() string {
+	box := m.theme.panel.Width(m.width - 2).Height(promptHeight - 2)
+
+	if m.mode == modeRunning {
+		hint := m.theme.muted.Render("os agentes estão trabalhando · ") + m.theme.key.Render("esc") + m.theme.muted.Render(" interrompe")
+		return box.BorderForeground(colorBorder).Render(hint)
+	}
+
+	m.prompt.SetWidth(max(m.width-6, 20))
+	return box.BorderForeground(colorAccent).Render(m.prompt.View())
+}
+
+// renderFooter carries the status badge, the running agent and the keys., the running agent and the keys.
 func (m *model) renderFooter() string {
 	badge, detail := m.status()
 
 	keys := []string{
-		styleKey.Render("tab") + styleMuted.Render(" panes"),
-		styleKey.Render("p") + styleMuted.Render(" pause"),
-		styleKey.Render("f") + styleMuted.Render(" follow"),
-		styleKey.Render("r") + styleMuted.Render(" reload"),
-		styleKey.Render("q") + styleMuted.Render(" quit"),
+		m.theme.key.Render("enter") + m.theme.muted.Render(" enviar"),
+		m.theme.key.Render("↑") + m.theme.muted.Render(" histórico"),
+		m.theme.key.Render("/continue") + m.theme.muted.Render(" retomar"),
+		m.theme.key.Render("tab") + m.theme.muted.Render(" painéis"),
+		m.theme.key.Render("ctrl+c") + m.theme.muted.Render(" sair"),
 	}
-	help := strings.Join(keys, styleMuted.Render(" · "))
-	if m.confirmQuit {
-		help = styleWarn.Render("stop the run and quit? q confirms · any other key cancels")
+	if m.mode == modeRunning {
+		keys = []string{
+			m.theme.key.Render("esc") + m.theme.muted.Render(" interromper"),
+			m.theme.key.Render("p") + m.theme.muted.Render(" pausar"),
+			m.theme.key.Render("f") + m.theme.muted.Render(" seguir"),
+			m.theme.key.Render("tab") + m.theme.muted.Render(" painéis"),
+			m.theme.key.Render("r") + m.theme.muted.Render(" recarregar"),
+		}
 	}
-
+	help := strings.Join(keys, m.theme.muted.Render(" · "))
 	first := badge + " " + detail
 	return lipgloss.NewStyle().Width(m.width).MaxWidth(m.width).Render(first) + "\n" +
 		lipgloss.NewStyle().Width(m.width).MaxWidth(m.width).Render(help)
@@ -229,22 +251,24 @@ func (m *model) renderFooter() string {
 
 func (m *model) status() (string, string) {
 	switch {
-	case m.runErr != nil:
-		return styleBadgeErr.Render("FAILED"), styleMuted.Render(shorten(m.runErr.Error(), max(m.width-16, 20)))
-	case m.finished:
-		summary := fmt.Sprintf("%s · %d steps · %d fixes · %s", m.state.Phase, m.steps, m.fixes, format(m.elapsed()))
+	case m.runErr != nil && m.mode == modeIdle:
+		return m.theme.badgeFailed.Render("FALHOU"), m.theme.muted.Render(shorten(m.runErr.Error(), max(m.width-16, 20)))
+	case m.mode == modeIdle && m.steps > 0:
+		summary := fmt.Sprintf("%s · %d passos · %d correções · %s", m.state.Phase, m.steps, m.fixes, format(m.elapsed()))
 		if m.logPath != "" {
 			summary += " · log " + m.logPath
 		}
-		return styleBadgeOK.Render("DONE"), styleMuted.Render(shorten(summary, max(m.width-10, 20)))
+		return m.theme.badgeDone.Render("PRONTO"), m.theme.muted.Render(shorten(summary, max(m.width-12, 20)))
+	case m.mode == modeIdle:
+		return m.theme.badgeIdle.Render("MAESTRO"), m.theme.muted.Render("descreva o que você quer construir neste projeto")
 	case m.paused:
-		return styleBadgePau.Render("PAUSED"), styleMuted.Render("the loop stops before the next dispatch")
+		return m.theme.badgePaused.Render("PAUSADO"), m.theme.muted.Render("o laço para antes do próximo despacho")
 	case m.active:
-		detail := roleStyle(m.current.Role).Render(strings.ToUpper(string(m.current.Role))) +
-			styleMuted.Render(" via "+string(m.current.Kind)+" · "+format(m.agentElapsed()))
-		return styleBadgeRun.Render("RUNNING"), m.spin.View() + " " + detail
+		detail := m.theme.role(m.current.Role).Render(strings.ToUpper(string(m.current.Role))) +
+			m.theme.muted.Render(" via "+string(m.current.Kind)+" · "+format(m.agentElapsed()))
+		return m.theme.badgeRunning.Render("RODANDO"), m.spin.View() + " " + detail
 	default:
-		return styleBadgeRun.Render("RUNNING"), styleMuted.Render("preparing the next dispatch…")
+		return m.theme.badgeRunning.Render("RODANDO"), m.theme.muted.Render("preparando o próximo despacho…")
 	}
 }
 

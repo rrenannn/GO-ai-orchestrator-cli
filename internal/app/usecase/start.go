@@ -41,7 +41,7 @@ func (u *Start) Execute(ctx context.Context, input StartInput) (CycleOutput, err
 	if input.Cycle.DryRun {
 		observer.Publish(event.Notice{
 			Level:   event.LevelInfo,
-			Message: "dry run: would record the request and start planning",
+			Message: "simulação: registraria o pedido e começaria o planejamento",
 		})
 		return CycleOutput{}, nil
 	}

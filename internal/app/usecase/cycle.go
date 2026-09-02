@@ -142,7 +142,7 @@ func (u *Cycle) Execute(ctx context.Context, input CycleInput) (output CycleOutp
 			return output, err
 		}
 		if state.Phase.IsTerminal() {
-			input.Observer.Publish(event.Notice{Level: event.LevelInfo, Message: "workflow completed: no open task remains"})
+			input.Observer.Publish(event.Notice{Level: event.LevelInfo, Message: "execução concluída: nenhuma tarefa aberta restante"})
 			return output, nil
 		}
 		if err := input.Gate.Wait(ctx); err != nil {
@@ -181,7 +181,7 @@ func (u *Cycle) Execute(ctx context.Context, input CycleInput) (output CycleOutp
 func (u *Cycle) preview(input CycleInput, state workflow.State) (CycleOutput, error) {
 	u.publishBoard(input, state)
 	if state.Phase.IsTerminal() {
-		input.Observer.Publish(event.Notice{Level: event.LevelInfo, Message: "dry run: workflow already completed"})
+		input.Observer.Publish(event.Notice{Level: event.LevelInfo, Message: "simulação: a execução já está concluída"})
 		return CycleOutput{FinalState: state}, nil
 	}
 	invocation, err := u.invocationFor(input, state)
@@ -190,7 +190,7 @@ func (u *Cycle) preview(input CycleInput, state workflow.State) (CycleOutput, er
 	}
 	input.Observer.Publish(event.Notice{
 		Level:   event.LevelInfo,
-		Message: fmt.Sprintf("dry run: would dispatch %s for phase %s", invocation.Assignment, state.Phase),
+		Message: fmt.Sprintf("simulação: despacharia %s na fase %s", invocation.Assignment, state.Phase),
 	})
 	return CycleOutput{FinalState: state, Planned: &invocation}, nil
 }
@@ -263,7 +263,7 @@ func (u *Cycle) resolveStall(input CycleInput, current, reported workflow.State,
 	if err := u.store.SaveState(input.ProjectDir, final); err != nil {
 		input.Observer.Publish(event.Notice{
 			Level:   event.LevelWarn,
-			Message: fmt.Sprintf("could not persist the completed state: %v", err),
+			Message: fmt.Sprintf("não foi possível persistir o estado concluído: %v", err),
 		})
 	}
 	return final, true
