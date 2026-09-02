@@ -11,12 +11,20 @@ import (
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/prompt"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/validation"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 func newCycle(store *fakeStore, runner *fakeRunner) (*usecase.Cycle, *fakeObserver) {
+	cycle, observer, _ := newValidatingCycle(store, runner, &fakeValidator{})
+	return cycle, observer
+}
+
+// newValidatingCycle exposes the validator so a test can script its outcome.
+func newValidatingCycle(store *fakeStore, runner *fakeRunner, validator *fakeValidator) (*usecase.Cycle, *fakeObserver, *fakeValidator) {
 	observer := &fakeObserver{}
-	return usecase.NewCycle(store, runner, &fakeLogs{}, fixedClock{}, prompt.NewBuilder()), observer
+	cycle := usecase.NewCycle(store, runner, validator, &fakeLogs{}, fixedClock{}, prompt.NewBuilder())
+	return cycle, observer, validator
 }
 
 // run executes a cycle with the observer the helper created.
@@ -391,5 +399,165 @@ func TestCycleGateCancellationStopsTheRun(t *testing.T) {
 	}
 	if len(runner.calls) != 0 {
 		t.Fatal("nothing must be dispatched while paused")
+	}
+}
+
+func TestValidationFailureGoesStraightBackToTheBuilder(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{initialized: true, state: workflow.State{Phase: workflow.PhaseImplementing, TaskID: "TA"}}
+	store.board = *boardWith(task.StatusImplementing)
+	runner := &fakeRunner{store: store, script: []step{
+		{writes: state(workflow.PhaseReviewing, "TA")}, // the builder claims it is done
+		{writes: state(workflow.PhaseReviewing, "TA")}, // and fixes it after forge disagrees
+		{writes: state(workflow.PhaseApproved, "TA"), board: boardWith(task.StatusApproved)},
+		{writes: state(workflow.PhaseCompleted, "TA")},
+	}}
+	validator := &fakeValidator{results: [][]validation.Result{failing("go test ./...")}}
+	cycle, observer, _ := newValidatingCycle(store, runner, validator)
+
+	output, err := cycle.Execute(context.Background(), usecase.CycleInput{ProjectDir: "/project", Observer: observer})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The reviewer is never asked about a failing build: builder, builder, reviewer, architect.
+	kinds := runner.kinds()
+	roles := make([]agent.Role, 0, len(runner.calls))
+	for _, call := range runner.calls {
+		roles = append(roles, call.Assignment.Role)
+	}
+	want := []agent.Role{agent.RoleBuilder, agent.RoleBuilder, agent.RoleReviewer, agent.RoleArchitect}
+	if len(roles) != len(want) {
+		t.Fatalf("want %v, got %v (%v)", want, roles, kinds)
+	}
+	for index := range want {
+		if roles[index] != want[index] {
+			t.Fatalf("dispatch %d: want %s, got %s", index, want[index], roles[index])
+		}
+	}
+	if output.Fixes != 1 {
+		t.Fatalf("a failed validation spends a correction round, got %d", output.Fixes)
+	}
+
+	// The failure is persisted so the builder can read what broke.
+	if len(store.validations) != 2 || store.validations[0].Passed() {
+		t.Fatalf("the evidence must be recorded: %+v", store.validations)
+	}
+	if len(store.saves) == 0 || store.saves[0].Phase != workflow.PhaseFixing {
+		t.Fatalf("forge must move the workflow to fixing itself: %+v", store.saves)
+	}
+	if got := countOf[event.ValidationFinished](observer); got != 2 {
+		t.Fatalf("want 2 validation verdicts published, got %d", got)
+	}
+}
+
+func TestValidationPassesToTheReviewer(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		initialized: true,
+		state:       workflow.State{Phase: workflow.PhaseImplementing, TaskID: "TA"},
+		board:       *boardWith(task.StatusImplementing),
+	}
+	runner := &fakeRunner{store: store, script: []step{
+		{writes: state(workflow.PhaseReviewing, "TA")},
+		{writes: state(workflow.PhaseApproved, "TA"), board: boardWith(task.StatusApproved)},
+		{writes: state(workflow.PhaseCompleted, "TA")},
+	}}
+	validator := &fakeValidator{}
+	cycle, observer, _ := newValidatingCycle(store, runner, validator)
+
+	if _, err := cycle.Execute(context.Background(), usecase.CycleInput{ProjectDir: "/project", Observer: observer}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(validator.calls) != 1 || validator.calls[0][0] != "go test ./..." {
+		t.Fatalf("the declared command must be run: %+v", validator.calls)
+	}
+	if runner.calls[1].Assignment.Role != agent.RoleReviewer {
+		t.Fatalf("a passing build goes to the reviewer, got %s", runner.calls[1].Assignment.Role)
+	}
+	if len(store.validations) != 1 || !store.validations[0].Passed() {
+		t.Fatalf("the evidence must be recorded even when it passes: %+v", store.validations)
+	}
+}
+
+func TestValidationIsSkippedWhenTheTaskDeclaresNoCommands(t *testing.T) {
+	t.Parallel()
+
+	board := task.Board{Tasks: []task.Task{{ID: "TA", Objective: "no tests", Status: task.StatusImplementing}}}
+	store := &fakeStore{
+		initialized: true,
+		state:       workflow.State{Phase: workflow.PhaseImplementing, TaskID: "TA"},
+		board:       board,
+	}
+	runner := &fakeRunner{store: store, script: []step{
+		{writes: state(workflow.PhaseReviewing, "TA")},
+		{writes: state(workflow.PhaseApproved, "TA"), board: boardWith(task.StatusApproved)},
+		{writes: state(workflow.PhaseCompleted, "TA")},
+	}}
+	validator := &fakeValidator{}
+	cycle, observer, _ := newValidatingCycle(store, runner, validator)
+
+	if _, err := cycle.Execute(context.Background(), usecase.CycleInput{ProjectDir: "/project", Observer: observer}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(validator.calls) != 0 {
+		t.Fatalf("nothing to run means nothing is run: %+v", validator.calls)
+	}
+	if runner.calls[1].Assignment.Role != agent.RoleReviewer {
+		t.Fatal("the task must still reach the reviewer")
+	}
+	if len(store.validations) != 1 || !store.validations[0].Empty() {
+		t.Fatalf("an empty report is still recorded: %+v", store.validations)
+	}
+}
+
+func TestValidationCanBeTurnedOff(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		initialized: true,
+		state:       workflow.State{Phase: workflow.PhaseImplementing, TaskID: "TA"},
+		board:       *boardWith(task.StatusImplementing),
+	}
+	runner := &fakeRunner{store: store, script: []step{
+		{writes: state(workflow.PhaseReviewing, "TA")},
+		{writes: state(workflow.PhaseApproved, "TA"), board: boardWith(task.StatusApproved)},
+		{writes: state(workflow.PhaseCompleted, "TA")},
+	}}
+	validator := &fakeValidator{results: [][]validation.Result{failing("go test ./...")}}
+	cycle, observer, _ := newValidatingCycle(store, runner, validator)
+
+	if _, err := cycle.Execute(context.Background(), usecase.CycleInput{
+		ProjectDir:     "/project",
+		Observer:       observer,
+		SkipValidation: true,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(validator.calls) != 0 {
+		t.Fatal("--no-validate must not run anything")
+	}
+	if runner.calls[1].Assignment.Role != agent.RoleReviewer {
+		t.Fatal("without validation the workflow behaves as before")
+	}
+}
+
+func TestValidationThatCannotRunStopsTheExecution(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		initialized: true,
+		state:       workflow.State{Phase: workflow.PhaseImplementing, TaskID: "TA"},
+		board:       *boardWith(task.StatusImplementing),
+	}
+	runner := &fakeRunner{store: store, script: []step{{writes: state(workflow.PhaseReviewing, "TA")}}}
+	validator := &fakeValidator{err: errors.New("shell not found")}
+	cycle, observer, _ := newValidatingCycle(store, runner, validator)
+
+	_, err := cycle.Execute(context.Background(), usecase.CycleInput{ProjectDir: "/project", Observer: observer})
+	if !errors.Is(err, usecase.ErrValidationFailed) {
+		t.Fatalf("want ErrValidationFailed, got %v", err)
 	}
 }

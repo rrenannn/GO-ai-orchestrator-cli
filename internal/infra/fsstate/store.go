@@ -8,15 +8,17 @@ import (
 	"path/filepath"
 
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/validation"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
 // Layout names the artifacts inside a project.
 const (
-	AgentDir    = ".agent"
-	StatusFile  = "STATUS.md"
-	TasksFile   = "TASKS.json"
-	RequestFile = "REQUEST.md"
+	AgentDir       = ".agent"
+	StatusFile     = "STATUS.md"
+	TasksFile      = "TASKS.json"
+	RequestFile    = "REQUEST.md"
+	ValidationFile = "VALIDATION.md"
 )
 
 // Store reads and writes the orchestration artifacts of a project.
@@ -73,6 +75,11 @@ func (s *Store) SaveRequest(projectDir string, requirement string) error {
 - Every task in TASKS.json is approved by the reviewer.
 `, requirement)
 	return writeFileAtomic(filepath.Join(projectDir, AgentDir, RequestFile), []byte(content))
+}
+
+// SaveValidation records the evidence forge gathered for a task.
+func (s *Store) SaveValidation(projectDir string, report validation.Report) error {
+	return writeFileAtomic(filepath.Join(projectDir, AgentDir, ValidationFile), renderValidation(report))
 }
 
 // writeFileAtomic avoids leaving a half-written artifact behind when an agent

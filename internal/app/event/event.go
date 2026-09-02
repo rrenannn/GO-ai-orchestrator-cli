@@ -8,6 +8,7 @@ import (
 
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/validation"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
@@ -64,6 +65,23 @@ type AgentFinished struct {
 	Result     agent.Result
 }
 
+// ValidationStarted announces the orchestrator running the commands the plan
+// declared for a task.
+type ValidationStarted struct {
+	TaskID   string
+	Commands []string
+}
+
+// ValidationOutput is one line written by a validation command.
+type ValidationOutput struct {
+	Line string
+}
+
+// ValidationFinished carries the evidence gathered for a task.
+type ValidationFinished struct {
+	Report validation.Report
+}
+
 // PhaseChanged reports an accepted workflow transition.
 type PhaseChanged struct {
 	From workflow.State
@@ -91,13 +109,16 @@ type RunFinished struct {
 	Err     error
 }
 
-func (RunStarted) isEvent()    {}
-func (BoardUpdated) isEvent()  {}
-func (AgentStarted) isEvent()  {}
-func (AgentOutput) isEvent()   {}
-func (AgentFinished) isEvent() {}
-func (PhaseChanged) isEvent()  {}
-func (Paused) isEvent()        {}
-func (Resumed) isEvent()       {}
-func (Notice) isEvent()        {}
-func (RunFinished) isEvent()   {}
+func (RunStarted) isEvent()         {}
+func (BoardUpdated) isEvent()       {}
+func (AgentStarted) isEvent()       {}
+func (AgentOutput) isEvent()        {}
+func (AgentFinished) isEvent()      {}
+func (ValidationStarted) isEvent()  {}
+func (ValidationOutput) isEvent()   {}
+func (ValidationFinished) isEvent() {}
+func (PhaseChanged) isEvent()       {}
+func (Paused) isEvent()             {}
+func (Resumed) isEvent()            {}
+func (Notice) isEvent()             {}
+func (RunFinished) isEvent()        {}

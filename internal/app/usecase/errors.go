@@ -13,6 +13,9 @@ var (
 	ErrStepLimit = errors.New("dispatch limit reached")
 	// ErrAgentFailed reports a nonzero exit from an agent CLI.
 	ErrAgentFailed = errors.New("agent failed")
+	// ErrValidationFailed reports validation commands that could not be run
+	// at all, which is different from commands that ran and failed.
+	ErrValidationFailed = errors.New("could not run the validation commands")
 	// ErrEmptyRequirement reports a start command without a requirement.
 	ErrEmptyRequirement = errors.New("requirement must not be empty")
 )

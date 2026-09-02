@@ -11,6 +11,7 @@ import (
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/validation"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
@@ -21,6 +22,7 @@ type fakeStore struct {
 	board       task.Board
 	request     string
 	saves       []workflow.State
+	validations []validation.Report
 	loadErr     error
 }
 
@@ -44,6 +46,55 @@ func (s *fakeStore) LoadBoard(string) (task.Board, error) { return s.board, nil 
 func (s *fakeStore) SaveRequest(_ string, requirement string) error {
 	s.request = requirement
 	return nil
+}
+
+func (s *fakeStore) SaveValidation(_ string, report validation.Report) error {
+	s.validations = append(s.validations, report)
+	return nil
+}
+
+// fakeValidator replays scripted validation outcomes.
+type fakeValidator struct {
+	results [][]validation.Result
+	err     error
+	calls   [][]string
+}
+
+func (v *fakeValidator) Validate(
+	_ context.Context,
+	_ string,
+	commands []string,
+	_ time.Duration,
+	sink io.Writer,
+) ([]validation.Result, error) {
+	v.calls = append(v.calls, commands)
+	if v.err != nil {
+		return nil, v.err
+	}
+	if sink != nil {
+		io.WriteString(sink, "validando\n")
+	}
+	if len(v.results) == 0 {
+		return passing(commands), nil
+	}
+
+	current := v.results[0]
+	v.results = v.results[1:]
+	return current, nil
+}
+
+// passing is the default outcome: every command succeeded.
+func passing(commands []string) []validation.Result {
+	results := make([]validation.Result, 0, len(commands))
+	for _, command := range commands {
+		results = append(results, validation.Result{Command: command})
+	}
+	return results
+}
+
+// failing builds the outcome of a command that ran and failed.
+func failing(command string) []validation.Result {
+	return []validation.Result{{Command: command, ExitCode: 1, Output: "FAIL ./internal/http"}}
 }
 
 // step is one scripted agent turn: what it writes back and how it exits.
@@ -173,7 +224,12 @@ func boardWith(statuses ...task.Status) *task.Board {
 	built := task.Board{Version: 1}
 	for index, status := range statuses {
 		id := string(rune('A' + index))
-		built.Tasks = append(built.Tasks, task.Task{ID: "T" + id, Objective: "task " + id, Status: status})
+		built.Tasks = append(built.Tasks, task.Task{
+			ID:         "T" + id,
+			Objective:  "task " + id,
+			Status:     status,
+			Validation: []string{"go test ./..."},
+		})
 	}
 	return &built
 }

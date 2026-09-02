@@ -13,11 +13,12 @@ import (
 
 // Artifacts are the shared files both agents read and write.
 const (
-	RequestFile = ".agent/REQUEST.md"
-	PlanFile    = ".agent/PLAN.md"
-	TasksFile   = ".agent/TASKS.json"
-	ReviewFile  = ".agent/REVIEW.md"
-	StatusFile  = ".agent/STATUS.md"
+	RequestFile    = ".agent/REQUEST.md"
+	PlanFile       = ".agent/PLAN.md"
+	TasksFile      = ".agent/TASKS.json"
+	ReviewFile     = ".agent/REVIEW.md"
+	ValidationFile = ".agent/VALIDATION.md"
+	StatusFile     = ".agent/STATUS.md"
 )
 
 // Builder renders prompts for every phase of the workflow.
@@ -42,6 +43,7 @@ func (Builder) Build(state workflow.State, current task.Task) (string, error) {
 			"Do not implement production code in this step.",
 			"Write the technical approach, the risks and the task order in "+PlanFile+".",
 			"Write small, ordered, independently reviewable tasks in "+TasksFile+"; each task needs id, status, objective, files, notes, acceptanceCriteria and validation commands.",
+			"The validation commands are executed by forge itself after the build, so they must be non-interactive, deterministic, and runnable from the repository root.",
 			"Select the first task as currentTaskId and set "+StatusFile+" to phase=implementing with task_id set to that id.",
 			"If the request needs no code change, explain why in "+PlanFile+" and set "+StatusFile+" to phase=completed.",
 		), nil
@@ -53,13 +55,15 @@ func (Builder) Build(state workflow.State, current task.Task) (string, error) {
 			fmt.Sprintf("Implement ONLY the current task: %s.", subject),
 			"Follow the conventions already present in the repository and avoid unrelated refactors.",
 			"Before finishing: format the changed code, run the task validation commands, inspect the git diff and verify every acceptance criterion.",
+			"Forge runs those same validation commands after you finish, so reporting success without passing them only sends the task back to you.",
 			fmt.Sprintf("Then set %s to phase=reviewing with task_id=%s.", StatusFile, state.TaskID),
 		), nil
 
 	case workflow.PhaseReviewing:
 		return join(
 			"You are the REVIEWER of this repository.",
-			"Read CLAUDE.md, "+PlanFile+", "+TasksFile+", "+ReviewFile+", the current git diff and the validation output.",
+			"Read CLAUDE.md, "+PlanFile+", "+TasksFile+", "+ReviewFile+", the current git diff and "+ValidationFile+".",
+			ValidationFile+" was written by forge, which ran the declared commands itself: treat it as evidence, not as a claim.",
 			fmt.Sprintf("Review ONLY the task: %s.", subject),
 			"Check correctness, architecture, regressions, concurrency, error handling, security, performance and tests.",
 			"Never approve code just because it compiles.",
@@ -71,8 +75,9 @@ func (Builder) Build(state workflow.State, current task.Task) (string, error) {
 	case workflow.PhaseFixing:
 		return join(
 			"You are the BUILDER of this repository.",
-			"Read AGENTS.md and "+ReviewFile+".",
-			fmt.Sprintf("Fix ONLY the review findings reported for the task: %s.", subject),
+			"Read AGENTS.md, "+ReviewFile+" and "+ValidationFile+".",
+			fmt.Sprintf("Fix ONLY what was reported for the task: %s.", subject),
+			"A failing command in "+ValidationFile+" was run by forge, not claimed by an agent: make it pass instead of arguing with it.",
 			"Do not start other tasks and do not refactor unrelated code.",
 			"Rerun the task validation commands and inspect the git diff.",
 			fmt.Sprintf("Then set %s to phase=reviewing with task_id=%s.", StatusFile, state.TaskID),

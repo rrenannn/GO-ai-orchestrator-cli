@@ -17,10 +17,10 @@ func TestBuildCoversEveryActivePhase(t *testing.T) {
 	current := task.Task{ID: "T1", Objective: "add rate limiting", Status: task.StatusPending}
 
 	cases := map[workflow.Phase][]string{
-		workflow.PhasePlanning:     {"ARCHITECT", prompt.PlanFile, prompt.TasksFile, "phase=implementing"},
+		workflow.PhasePlanning:     {"ARCHITECT", prompt.PlanFile, prompt.TasksFile, "phase=implementing", "executed by forge"},
 		workflow.PhaseImplementing: {"BUILDER", "T1 - add rate limiting", "phase=reviewing"},
-		workflow.PhaseReviewing:    {"REVIEWER", "APPROVED", "CHANGES REQUESTED", "phase=fixing"},
-		workflow.PhaseFixing:       {"BUILDER", prompt.ReviewFile, "phase=reviewing"},
+		workflow.PhaseReviewing:    {"REVIEWER", "APPROVED", "CHANGES REQUESTED", "phase=fixing", prompt.ValidationFile},
+		workflow.PhaseFixing:       {"BUILDER", prompt.ReviewFile, prompt.ValidationFile, "phase=reviewing"},
 		workflow.PhaseApproved:     {"ARCHITECT", "next open task", "phase=completed"},
 	}
 

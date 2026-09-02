@@ -12,6 +12,7 @@ import (
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/prompt"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/validation"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
@@ -25,14 +26,15 @@ const (
 // run-scoped collaborators: the delivery layer supplies the ones that match
 // the presentation it chose for this run.
 type CycleInput struct {
-	ProjectDir   string
-	Requirement  string
-	DryRun       bool
-	MaxFixes     int
-	MaxSteps     int
-	AgentTimeout time.Duration
-	Observer     port.Observer
-	Gate         port.Gate
+	ProjectDir     string
+	Requirement    string
+	DryRun         bool
+	MaxFixes       int
+	MaxSteps       int
+	AgentTimeout   time.Duration
+	SkipValidation bool
+	Observer       port.Observer
+	Gate           port.Gate
 }
 
 func (i CycleInput) withDefaults() CycleInput {
@@ -72,22 +74,31 @@ type CycleOutput struct {
 // architect plans, builder implements, reviewer approves or rejects,
 // builder fixes, architect selects the next task, until nothing is open.
 type Cycle struct {
-	store   port.StateStore
-	runner  port.AgentRunner
-	logs    port.RunLog
-	clock   port.Clock
-	prompts prompt.Builder
+	store     port.StateStore
+	runner    port.AgentRunner
+	validator port.Validator
+	logs      port.RunLog
+	clock     port.Clock
+	prompts   prompt.Builder
 }
 
 // NewCycle wires the use case.
 func NewCycle(
 	store port.StateStore,
 	runner port.AgentRunner,
+	validator port.Validator,
 	logs port.RunLog,
 	clock port.Clock,
 	prompts prompt.Builder,
 ) *Cycle {
-	return &Cycle{store: store, runner: runner, logs: logs, clock: clock, prompts: prompts}
+	return &Cycle{
+		store:     store,
+		runner:    runner,
+		validator: validator,
+		logs:      logs,
+		clock:     clock,
+		prompts:   prompts,
+	}
 }
 
 // Execute runs the loop until the workflow completes, a limit is reached,
@@ -241,9 +252,68 @@ func (u *Cycle) dispatch(
 		next = resolved
 	}
 
+	if next, err = u.validate(ctx, input, next, sink); err != nil {
+		return current, err
+	}
+
 	input.Observer.Publish(event.PhaseChanged{From: current, To: next})
 	u.publishBoard(input, next)
 	return next, nil
+}
+
+// validate runs the commands the plan declared for the task that just left
+// the builder. Forge runs them itself: an agent reporting green is a claim,
+// not evidence. Failing commands send the work straight back to the builder,
+// without spending a reviewer dispatch on a fact.
+func (u *Cycle) validate(
+	ctx context.Context,
+	input CycleInput,
+	next workflow.State,
+	sink io.Writer,
+) (workflow.State, error) {
+	if input.SkipValidation || u.validator == nil || next.Phase != workflow.PhaseReviewing {
+		return next, nil
+	}
+
+	current, err := u.currentTask(input.ProjectDir, next)
+	if err != nil {
+		return next, err
+	}
+
+	report := validation.NewReport(next.TaskID, nil)
+	if len(current.Validation) > 0 {
+		input.Observer.Publish(event.ValidationStarted{TaskID: next.TaskID, Commands: current.Validation})
+
+		stream := newLineWriter(func(line string) {
+			input.Observer.Publish(event.ValidationOutput{Line: line})
+		})
+		results, err := u.validator.Validate(ctx, input.ProjectDir, current.Validation, input.AgentTimeout, io.MultiWriter(sink, stream))
+		stream.Close()
+		if err != nil {
+			return next, fmt.Errorf("%w: %w", ErrValidationFailed, err)
+		}
+		report = validation.NewReport(next.TaskID, results)
+	}
+
+	input.Observer.Publish(event.ValidationFinished{Report: report})
+
+	// The evidence is written either way: the reviewer reads it to judge, the
+	// builder to fix.
+	if err := u.store.SaveValidation(input.ProjectDir, report); err != nil {
+		input.Observer.Publish(event.Notice{
+			Level:   event.LevelWarn,
+			Message: fmt.Sprintf("não foi possível gravar a validação: %v", err),
+		})
+	}
+	if report.Passed() {
+		return next, nil
+	}
+
+	rejected := workflow.State{Phase: workflow.PhaseFixing, TaskID: next.TaskID}
+	if err := u.store.SaveState(input.ProjectDir, rejected); err != nil {
+		return next, fmt.Errorf("record the validation failure: %w", err)
+	}
+	return rejected, nil
 }
 
 // resolveStall covers the one benign stall: the architect confirmed the last

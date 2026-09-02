@@ -39,6 +39,24 @@ func (r *PlainRenderer) Publish(published event.Event) {
 	case event.AgentFinished:
 		r.printf("%s finished in %s", typed.Assignment, typed.Result.Duration.Round(time.Second))
 
+	case event.ValidationStarted:
+		r.printf("validando %s: %s", typed.TaskID, strings.Join(typed.Commands, ", "))
+
+	case event.ValidationOutput:
+		fmt.Fprintf(r.out, "   %s\n", strings.TrimRight(typed.Line, "\r\n"))
+
+	case event.ValidationFinished:
+		if typed.Report.Passed() {
+			r.printf("validação: %s", typed.Report.Summary())
+			return
+		}
+		r.printf("validação: %s", typed.Report.Summary())
+		for _, failure := range typed.Report.Failures() {
+			if failure.Output != "" {
+				fmt.Fprintf(r.out, "   %s\n", failure.Output)
+			}
+		}
+
 	case event.PhaseChanged:
 		r.printf("%s -> %s", typed.From.Phase, typed.To.Phase)
 

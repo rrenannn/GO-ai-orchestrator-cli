@@ -13,6 +13,7 @@ import (
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/port"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/validation"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
@@ -400,5 +401,29 @@ func TestCtrlCQuitsOnlyWhenIdle(t *testing.T) {
 	built.Update(runDoneMsg{err: context.Canceled})
 	if _, quit := built.Update(tea.KeyMsg{Type: tea.KeyCtrlC}); quit == nil {
 		t.Fatal("ctrl+c with nothing running must quit")
+	}
+}
+
+func TestValidationShowsUpAsForgeEvidence(t *testing.T) {
+	t.Parallel()
+
+	built, _ := screen(t,
+		event.RunStarted{ProjectDir: "/tmp/demo", MaxSteps: 12, MaxFixes: 2},
+		event.ValidationStarted{TaskID: "T1", Commands: []string{"go test ./..."}},
+	)
+	view := built.View()
+	if !strings.Contains(view, "VALIDANDO") || !strings.Contains(view, "$ go test ./...") {
+		t.Fatalf("a validation in flight must be visible:\n%s", view)
+	}
+
+	built.Update(eventMsg{event.ValidationFinished{Report: validation.NewReport("T1", []validation.Result{
+		{Command: "go test ./...", ExitCode: 1, Output: "FAIL github.com/x/y"},
+	})}})
+	view = built.View()
+	if built.validating {
+		t.Fatal("the verdict ends the validation state")
+	}
+	if !strings.Contains(view, "1 comando falhou") || !strings.Contains(view, "FAIL github.com/x/y") {
+		t.Fatalf("the failure and its output must be shown:\n%s", view)
 	}
 }

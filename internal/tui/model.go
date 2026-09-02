@@ -67,6 +67,7 @@ const (
 	lineWarn
 	lineFail
 	lineUser
+	lineOK
 )
 
 type line struct {
@@ -109,12 +110,13 @@ type model struct {
 	fixes          int
 	maxFixes       int
 
-	lines  []line
-	files  map[pane]string
-	pane   pane
-	follow bool
-	paused bool
-	runErr error
+	lines      []line
+	files      map[pane]string
+	pane       pane
+	follow     bool
+	paused     bool
+	validating bool
+	runErr     error
 }
 
 func newModel(session *Session, actions Actions) *model {
@@ -492,6 +494,31 @@ func (m *model) apply(published event.Event) {
 			role: typed.Assignment.Role,
 			text: typed.Assignment.String() + " terminou em " + typed.Result.Duration.Round(time.Second).String(),
 		})
+
+	case event.ValidationStarted:
+		m.validating = true
+		m.append(line{kind: lineSystem, text: "── forge validando " + typed.TaskID + " ──"})
+		for _, command := range typed.Commands {
+			m.append(line{kind: lineInfo, text: "$ " + command})
+		}
+
+	case event.ValidationOutput:
+		m.append(line{kind: lineAgent, text: typed.Line})
+
+	case event.ValidationFinished:
+		m.validating = false
+		kind := lineOK
+		if !typed.Report.Passed() {
+			kind = lineFail
+		}
+		m.append(line{kind: kind, text: "validação: " + typed.Report.Summary()})
+		for _, failure := range typed.Report.Failures() {
+			for _, output := range strings.Split(failure.Output, "\n") {
+				if strings.TrimSpace(output) != "" {
+					m.append(line{kind: lineAgent, text: output})
+				}
+			}
+		}
 
 	case event.PhaseChanged:
 		m.state = typed.To

@@ -27,6 +27,7 @@ func newApp(t *testing.T) (*cli.App, *bytes.Buffer, *bytes.Buffer) {
 	cycle := usecase.NewCycle(
 		store,
 		process.NewRunner("echo", "echo"),
+		process.NewValidator(),
 		runlog.NewLogger(),
 		clock.New(),
 		prompt.NewBuilder(),
@@ -139,5 +140,25 @@ func TestInteractiveSessionNeedsATerminal(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "precisa de um terminal") {
 		t.Fatalf("unexpected stderr:\n%s", stderr)
+	}
+}
+
+func TestValidationFlagReachesTheUseCase(t *testing.T) {
+	t.Parallel()
+
+	project := t.TempDir()
+	app, stdout, stderr := newApp(t)
+	ctx := context.Background()
+
+	if code := app.Run(ctx, []string{"init", project}); code != cli.ExitOK {
+		t.Fatalf("init failed (%d): %s", code, stderr)
+	}
+
+	stdout.Reset()
+	if code := app.Run(ctx, []string{"cycle", "--no-validate", "--dry-run", project}); code != cli.ExitOK {
+		t.Fatalf("--no-validate must be accepted (%d): %s", code, stderr)
+	}
+	if !strings.Contains(stdout.String(), "architect (claude)") {
+		t.Fatalf("unexpected output:\n%s", stdout)
 	}
 }

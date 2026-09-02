@@ -57,6 +57,16 @@ Never approve code just because it compiles.
 Record the verdict in `.agent/REVIEW.md` as `APPROVED` or `CHANGES REQUESTED`,
 with actionable findings.
 
+# Validation
+
+Forge runs the `validation` commands of each task itself, after the builder
+finishes, and writes the result to `.agent/VALIDATION.md`. Read that file: it
+is evidence, not a claim. A task whose commands fail never reaches you — it
+goes straight back to the builder.
+
+When planning, declare validation commands that are non-interactive,
+deterministic, and runnable from the repository root.
+
 # Workflow contract
 
 Forge reads `.agent/STATUS.md` after every dispatch and refuses any
@@ -76,4 +86,5 @@ Shared files:
 - `.agent/PLAN.md`
 - `.agent/TASKS.json`
 - `.agent/REVIEW.md`
+- `.agent/VALIDATION.md`
 - `.agent/STATUS.md`

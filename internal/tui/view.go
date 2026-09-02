@@ -204,6 +204,8 @@ func (m *model) renderLine(entry line) string {
 		return m.theme.fail.Render("✗ " + entry.text)
 	case lineUser:
 		return m.theme.user.Render("› " + entry.text)
+	case lineOK:
+		return m.theme.ok.Render("✓ " + entry.text)
 	default:
 		return m.theme.role(entry.role).Render("▏") + entry.text
 	}
@@ -263,6 +265,8 @@ func (m *model) status() (string, string) {
 		return m.theme.badgeIdle.Render("FORGE"), m.theme.muted.Render("descreva o que você quer construir neste projeto")
 	case m.paused:
 		return m.theme.badgePaused.Render("PAUSADO"), m.theme.muted.Render("o laço para antes do próximo despacho")
+	case m.validating:
+		return m.theme.badgeRunning.Render("VALIDANDO"), m.spin.View() + " " + m.theme.muted.Render("forge rodando os comandos da tarefa")
 	case m.active:
 		detail := m.theme.role(m.current.Role).Render(strings.ToUpper(string(m.current.Role))) +
 			m.theme.muted.Render(" via "+string(m.current.Kind)+" · "+format(m.agentElapsed()))

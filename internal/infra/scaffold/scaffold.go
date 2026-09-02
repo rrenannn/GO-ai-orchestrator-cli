@@ -27,6 +27,7 @@ var managed = []struct {
 	{"assets/agent/PLAN.md", ".agent/PLAN.md"},
 	{"assets/agent/TASKS.json", ".agent/TASKS.json"},
 	{"assets/agent/REVIEW.md", ".agent/REVIEW.md"},
+	{"assets/agent/VALIDATION.md", ".agent/VALIDATION.md"},
 	{"assets/agent/STATUS.md", ".agent/STATUS.md"},
 }
 

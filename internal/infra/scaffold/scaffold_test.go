@@ -20,8 +20,8 @@ func TestInstallWritesTheManagedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(files) != 7 {
-		t.Fatalf("want 7 managed files, got %d", len(files))
+	if len(files) != 8 {
+		t.Fatalf("want 8 managed files, got %d", len(files))
 	}
 	for _, file := range files {
 		if file.Action != port.FileInstalled {

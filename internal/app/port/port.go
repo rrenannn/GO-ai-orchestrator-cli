@@ -11,6 +11,7 @@ import (
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/app/event"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/validation"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/workflow"
 )
 
@@ -26,6 +27,15 @@ type StateStore interface {
 	LoadBoard(projectDir string) (task.Board, error)
 	// SaveRequest writes the feature request the architect will plan from.
 	SaveRequest(projectDir string, requirement string) error
+	// SaveValidation records the evidence gathered for a task, which both
+	// agents read before their next step.
+	SaveValidation(projectDir string, report validation.Report) error
+}
+
+// Validator runs the validation commands a task declared and reports what
+// happened, streaming their output to sink.
+type Validator interface {
+	Validate(ctx context.Context, projectDir string, commands []string, timeout time.Duration, sink io.Writer) ([]validation.Result, error)
 }
 
 // AgentRunner dispatches an invocation to the CLI of an agent.

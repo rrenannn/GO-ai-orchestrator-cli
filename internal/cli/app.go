@@ -329,6 +329,7 @@ func bindRunFlags(flags *flag.FlagSet) *runFlags {
 	flags.IntVar(&run.input.MaxFixes, "max-fixes", usecase.DefaultMaxFixes, "rodadas de correção por tarefa")
 	flags.IntVar(&run.input.MaxSteps, "max-steps", usecase.DefaultMaxSteps, "despachos de agente por execução")
 	flags.DurationVar(&run.input.AgentTimeout, "timeout", 0, "timeout por agente, zero desliga")
+	flags.BoolVar(&run.input.SkipValidation, "no-validate", false, "não roda os comandos de validação das tarefas")
 	return run
 }
 

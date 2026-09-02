@@ -37,7 +37,14 @@ func run(ctx context.Context) int {
 		os.Getenv("FORGE_CLAUDE_CMD"),
 		os.Getenv("FORGE_CODEX_CMD"),
 	)
-	cycle := usecase.NewCycle(store, runner, runlog.NewLogger(), clock.New(), prompt.NewBuilder())
+	cycle := usecase.NewCycle(
+		store,
+		runner,
+		process.NewValidator(),
+		runlog.NewLogger(),
+		clock.New(),
+		prompt.NewBuilder(),
+	)
 
 	container := cli.Container{
 		Initialize: usecase.NewInitialize(scaffold.NewInstaller()),

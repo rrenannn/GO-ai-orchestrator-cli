@@ -9,6 +9,7 @@ Read before working:
 - `.agent/PLAN.md`
 - `.agent/TASKS.json`
 - `.agent/REVIEW.md`
+- `.agent/VALIDATION.md`
 
 Follow the architecture and the conventions already present in the repository.
 
@@ -37,6 +38,12 @@ Do not:
 - rewrite history
 - delete unrelated code
 - modify generated files unless explicitly requested
+
+# Validation
+
+Forge runs the `validation` commands of the task itself after you finish, and
+records the outcome in `.agent/VALIDATION.md`. Saying the tests pass without
+running them only sends the task back to you, so run them.
 
 # Workflow contract
 

@@ -144,6 +144,7 @@ força esse modo, e `--dry-run` sempre usa ele.
 | --- | --- | --- |
 | `--plain` | `false` | transcrição em texto, sem interface interativa |
 | `--dry-run` | `false` | mostra qual agente rodaria, sem despachar nada |
+| `--no-validate` | `false` | não roda os comandos de validação das tarefas |
 | `--max-fixes <n>` | `2` | rodadas de correção permitidas por tarefa |
 | `--max-steps <n>` | `12` | despachos de agente permitidos por execução |
 | `--timeout <dur>` | sem limite | timeout por agente, ex.: `20m` |
@@ -155,6 +156,27 @@ força esse modo, e `--dry-run` sempre usa ele.
 | `FORGE_CLAUDE_CMD` | `claude` | executável do Claude Code |
 | `FORGE_CODEX_CMD` | `codex` | executável do Codex |
 | `FORGE_BACKGROUND` | detectado | `dark` ou `light`; evita perguntar a cor de fundo ao terminal |
+
+## Validação: o forge não acredita, ele roda
+
+Cada tarefa do `TASKS.json` declara seus comandos de validação. Depois que o
+builder diz que terminou, **o forge roda esses comandos ele mesmo** e grava o
+resultado em `.agent/VALIDATION.md`. Se algum falhar, a tarefa volta direto
+para o builder — sem gastar um despacho do revisor, porque teste vermelho é
+fato, não opinião:
+
+```text
+codex implementa → forge roda `go test ./...` → FALHOU → codex corrige
+                                              → PASSOU → claude revisa
+```
+
+Uma falha de validação consome uma rodada do orçamento de `--max-fixes`, igual
+a uma rejeição do revisor. Tarefa sem comandos declarados segue direto para a
+revisão. `--no-validate` desliga o mecanismo.
+
+Os comandos rodam via `sh -c` na raiz do projeto, então o plano precisa
+declarar comandos não interativos e determinísticos — o `CLAUDE.md` instalado
+pelo `init` já instrui o arquiteto nesse sentido.
 
 ## Máquina de estados
 
@@ -182,6 +204,7 @@ Os agentes se comunicam por arquivos no projeto alvo, e não pelo processo:
 | `.agent/PLAN.md` | arquiteto | abordagem, riscos e ordem das tarefas |
 | `.agent/TASKS.json` | arquiteto | tarefas atômicas com critérios e validação |
 | `.agent/REVIEW.md` | revisor | achados e veredito (`APPROVED` / `CHANGES REQUESTED`) |
+| `.agent/VALIDATION.md` | forge | saída dos comandos de validação, executados pelo orquestrador |
 | `.agent/STATUS.md` | todos | fase atual e tarefa atual |
 | `.agent/runs/*.log` | forge | transcrição completa de cada execução |
 
