@@ -13,6 +13,7 @@ import (
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/prompt"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/clock"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/fsstate"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/gitrepo"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/process"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/runlog"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/scaffold"
@@ -37,6 +38,7 @@ func newApp(t *testing.T) (*cli.App, *bytes.Buffer, *bytes.Buffer) {
 		Start:      usecase.NewStart(store, cycle),
 		Cycle:      cycle,
 		Status:     usecase.NewStatus(store),
+		Inspect:    usecase.NewInspect(gitrepo.New("")),
 	}
 	// interactive=false keeps the tests on the plain transcript.
 	return cli.New(container, stdout, stderr, "test", false), stdout, stderr

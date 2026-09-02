@@ -46,6 +46,19 @@ type AgentRunner interface {
 	Available(kind agent.Kind) error
 }
 
+// Workspace is the git repository of the target project: what the agents
+// changed, and where approved work is recorded.
+type Workspace interface {
+	// IsRepository reports whether the project is under git at all.
+	IsRepository(ctx context.Context, projectDir string) (bool, error)
+	// Diff returns the uncommitted work, staged and unstaged together.
+	Diff(ctx context.Context, projectDir string) (string, error)
+	// HasChanges reports whether anything is left to commit.
+	HasChanges(ctx context.Context, projectDir string) (bool, error)
+	// Commit stages everything and commits it, returning the short hash.
+	Commit(ctx context.Context, projectDir string, message string) (string, error)
+}
+
 // FileAction is what a scaffolder did with a single template file.
 type FileAction string
 

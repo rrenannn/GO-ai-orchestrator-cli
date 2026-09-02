@@ -33,6 +33,7 @@ type Container struct {
 	Start      *usecase.Start
 	Cycle      *usecase.Cycle
 	Status     *usecase.Status
+	Inspect    *usecase.Inspect
 }
 
 // App dispatches a command line to a use case.
@@ -215,6 +216,10 @@ func (a *App) actions(run *runFlags) tui.Actions {
 		Continue: func(ctx context.Context) error {
 			_, err := a.container.Cycle.Execute(ctx, run.input)
 			return err
+		},
+		Diff: func(ctx context.Context) (string, error) {
+			output, err := a.container.Inspect.Execute(ctx, usecase.InspectInput{ProjectDir: run.input.ProjectDir})
+			return output.Diff, err
 		},
 	}
 }

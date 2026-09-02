@@ -30,7 +30,7 @@ Flags (run, start, cycle):
   --timeout <duração>   timeout por agente, ex.: 20m (padrão: sem limite)
 
 Teclas dos painéis (durante a execução):
-  tab / 1 2 3    alterna Live, Plan e Review
+  tab / 1 2 3 4  alterna Live, Plan, Review e Diff
   p              pausa ou retoma antes do próximo despacho
   f · g · G      seguir, topo, fim
   r              recarrega o arquivo do painel

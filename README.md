@@ -93,7 +93,7 @@ O diretório do projeto é opcional em todos: sem ele, vale o diretório atual.
 ╭─ forge  ~/projetos/api                                    2m14s ─╮
 │ ✓ plan → ✓ build → ● review → ○ approved → ○ done      ↺ fixing    │
 ╰────────────────────────────────────────────────────────────────────╯
-╭ PEDIDO                   ╮╭ Live · Plan · Review                   ╮
+╭ PEDIDO                   ╮╭ Live · Plan · Review · Diff            ╮
 │ adicionar rate limiting  ││ ── builder (codex) · fase fixing ──    │
 │                          ││ ▏editando internal/http/limiter.go     │
 │ TAREFAS                  ││ ▏go test ./... ok                      │
@@ -120,6 +120,7 @@ No prompt (nada rodando):
 | `↑` `↓` | histórico dos pedidos já enviados |
 | `/continue` | retoma o ciclo já registrado no projeto, sem novo pedido |
 | `/help` `/quit` | ajuda e saída |
+| `tab` | alterna os painéis, inclusive o Diff, sem sair do prompt |
 | `esc` | limpa o que foi digitado |
 | `ctrl+c` `ctrl+d` | sai |
 
@@ -128,7 +129,7 @@ Durante a execução:
 | Tecla | Ação |
 | --- | --- |
 | `esc` · `ctrl+c` | interrompe a execução; a sessão continua para o próximo pedido |
-| `tab` / `1` `2` `3` | alterna **Live** (transcrição), **Plan** (`.agent/PLAN.md`) e **Review** (`.agent/REVIEW.md`) |
+| `tab` / `1` `2` `3` `4` | alterna **Live** (transcrição), **Plan** (`.agent/PLAN.md`), **Review** (`.agent/REVIEW.md`) e **Diff** (o `git diff` do que os agentes escreveram) |
 | `p` | pausa ou retoma: o laço para **antes** do próximo despacho, sem matar o agente em curso |
 | `f` · `g` · `G` | seguir a saída · ir ao topo · ir ao fim |
 | `↑` `↓` `PgUp` `PgDn` | rola o painel |
@@ -156,6 +157,7 @@ força esse modo, e `--dry-run` sempre usa ele.
 | `FORGE_CLAUDE_CMD` | `claude` | executável do Claude Code |
 | `FORGE_CODEX_CMD` | `codex` | executável do Codex |
 | `FORGE_BACKGROUND` | detectado | `dark` ou `light`; evita perguntar a cor de fundo ao terminal |
+| `FORGE_GIT_CMD` | `git` | executável do git |
 
 ## Validação: o forge não acredita, ele roda
 

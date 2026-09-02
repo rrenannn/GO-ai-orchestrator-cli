@@ -16,6 +16,7 @@ import (
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/prompt"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/clock"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/fsstate"
+	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/gitrepo"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/process"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/runlog"
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/infra/scaffold"
@@ -46,11 +47,14 @@ func run(ctx context.Context) int {
 		prompt.NewBuilder(),
 	)
 
+	workspace := gitrepo.New(os.Getenv("FORGE_GIT_CMD"))
+
 	container := cli.Container{
 		Initialize: usecase.NewInitialize(scaffold.NewInstaller()),
 		Start:      usecase.NewStart(store, cycle),
 		Cycle:      cycle,
 		Status:     usecase.NewStatus(store),
+		Inspect:    usecase.NewInspect(workspace),
 	}
 
 	return cli.New(container, os.Stdout, os.Stderr, version, isTerminal(os.Stdout)).Run(ctx, os.Args[1:])

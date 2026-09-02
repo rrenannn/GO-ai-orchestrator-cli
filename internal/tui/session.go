@@ -26,6 +26,8 @@ type Actions struct {
 	Start func(ctx context.Context, requirement string) error
 	// Continue resumes the workflow already recorded in the project.
 	Continue func(ctx context.Context) error
+	// Diff returns the uncommitted work of the project.
+	Diff func(ctx context.Context) (string, error)
 }
 
 // Session bridges the running use cases and the Bubble Tea program: it carries

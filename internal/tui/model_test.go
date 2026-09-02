@@ -427,3 +427,79 @@ func TestValidationShowsUpAsForgeEvidence(t *testing.T) {
 		t.Fatalf("the failure and its output must be shown:\n%s", view)
 	}
 }
+
+func TestDiffPaneAsksTheApplication(t *testing.T) {
+	t.Parallel()
+
+	built := newModel(NewSession("/tmp/demo"), Actions{
+		Diff: func(context.Context) (string, error) {
+			return "diff --git a/main.go b/main.go\n@@ -1 +1,2 @@\n-antigo\n+novo\n", nil
+		},
+	})
+	built.Update(tea.WindowSizeMsg{Width: 110, Height: 34})
+
+	cmd := built.selectPane(paneDiff)
+	if cmd == nil {
+		t.Fatal("the Diff pane must ask the application for the diff")
+	}
+	message, ok := cmd().(fileMsg)
+	if !ok || message.pane != paneDiff {
+		t.Fatalf("unexpected message: %#v", message)
+	}
+
+	built.Update(message)
+	view := built.View()
+	for _, fragment := range []string{"Diff", "+novo", "-antigo", "@@ -1 +1,2 @@"} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("the diff must be rendered, missing %q:\n%s", fragment, view)
+		}
+	}
+}
+
+func TestDiffPaneReportsAnEmptyTreeAndFailures(t *testing.T) {
+	t.Parallel()
+
+	empty := newModel(NewSession("/tmp/demo"), Actions{
+		Diff: func(context.Context) (string, error) { return "   \n", nil },
+	})
+	empty.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	empty.Update(empty.selectPane(paneDiff)())
+	if !strings.Contains(empty.View(), "nenhuma mudança") {
+		t.Fatalf("an empty tree must say so:\n%s", empty.View())
+	}
+
+	broken := newModel(NewSession("/tmp/demo"), Actions{
+		Diff: func(context.Context) (string, error) { return "", errors.New("git ausente") },
+	})
+	broken.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	broken.Update(broken.selectPane(paneDiff)())
+	if !strings.Contains(broken.View(), "git ausente") {
+		t.Fatalf("a failure must be shown, not swallowed:\n%s", broken.View())
+	}
+}
+
+func TestTabCyclesThroughEveryPane(t *testing.T) {
+	t.Parallel()
+
+	built, _ := screen(t, event.RunStarted{ProjectDir: t.TempDir(), MaxSteps: 12})
+	seen := []pane{built.pane}
+	for index := 0; index < len(panes)-1; index++ {
+		built.Update(tea.KeyMsg{Type: tea.KeyTab})
+		seen = append(seen, built.pane)
+	}
+	for index, want := range panes {
+		if seen[index] != want {
+			t.Fatalf("tab %d: want %v, got %v", index, want, seen[index])
+		}
+	}
+
+	// And back to where it started.
+	built.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if built.pane != paneLive {
+		t.Fatalf("tab must wrap around, got %v", built.pane)
+	}
+	built.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	if built.pane != paneDiff {
+		t.Fatalf("shift+tab must walk backwards, got %v", built.pane)
+	}
+}

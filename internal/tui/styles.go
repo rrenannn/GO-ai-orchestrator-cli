@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/agent"
@@ -95,6 +97,24 @@ func (t theme) role(role agent.Role) lipgloss.Style {
 		return t.reviewer
 	default:
 		return t.muted
+	}
+}
+
+// diffLine colors one line of a unified diff.
+func (t theme) diffLine(text string) string {
+	switch {
+	case strings.HasPrefix(text, "diff --git"), strings.HasPrefix(text, "index "):
+		return t.title.Render(text)
+	case strings.HasPrefix(text, "@@"):
+		return t.accent.Render(text)
+	case strings.HasPrefix(text, "+++"), strings.HasPrefix(text, "---"):
+		return t.muted.Render(text)
+	case strings.HasPrefix(text, "+"):
+		return t.ok.Render(text)
+	case strings.HasPrefix(text, "-"):
+		return t.fail.Render(text)
+	default:
+		return text
 	}
 }
 

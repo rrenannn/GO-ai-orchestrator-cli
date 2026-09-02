@@ -48,9 +48,18 @@ const (
 	paneLive pane = iota
 	panePlan
 	paneReview
+	paneDiff
 )
 
-var paneNames = map[pane]string{paneLive: "Live", panePlan: "Plan", paneReview: "Review"}
+// panes is the tab order of the right side.
+var panes = []pane{paneLive, panePlan, paneReview, paneDiff}
+
+var paneNames = map[pane]string{
+	paneLive:   "Live",
+	panePlan:   "Plan",
+	paneReview: "Review",
+	paneDiff:   "Diff",
+}
 
 var paneFiles = map[pane]string{
 	panePlan:   filepath.Join(".agent", "PLAN.md"),
@@ -238,10 +247,10 @@ func (m *model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "tab":
-		return m, m.selectPane((m.pane + 1) % 3)
+		return m, m.selectPane((m.pane + 1) % pane(len(panes)))
 
 	case "shift+tab":
-		return m, m.selectPane((m.pane + 2) % 3)
+		return m, m.selectPane((m.pane + pane(len(panes)) - 1) % pane(len(panes)))
 
 	case "pgup", "pgdown":
 		return m, m.scroll(key)
@@ -293,6 +302,8 @@ func (m *model) handleRunningKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.selectPane(panePlan)
 	case "3":
 		return m, m.selectPane(paneReview)
+	case "4":
+		return m, m.selectPane(paneDiff)
 	}
 
 	return m, m.scroll(key)
@@ -428,9 +439,31 @@ func (m *model) selectPane(target pane) tea.Cmd {
 	return m.loadPane(target)
 }
 
+// loadDiff asks the application for the uncommitted work. The interface never
+// runs git itself.
+func (m *model) loadDiff() tea.Cmd {
+	if m.actions.Diff == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		diff, err := m.actions.Diff(context.Background())
+		switch {
+		case err != nil:
+			return fileMsg{pane: paneDiff, content: "não foi possível ler o diff: " + err.Error()}
+		case strings.TrimSpace(diff) == "":
+			return fileMsg{pane: paneDiff, content: "nenhuma mudança na árvore de trabalho"}
+		default:
+			return fileMsg{pane: paneDiff, content: diff}
+		}
+	}
+}
+
 // loadPane reads an artifact from the project. Reading it fresh on demand
 // keeps the interface honest: it shows what the agents actually wrote.
 func (m *model) loadPane(target pane) tea.Cmd {
+	if target == paneDiff {
+		return m.loadDiff()
+	}
 	name, ok := paneFiles[target]
 	if !ok || m.projectDir == "" {
 		return nil
@@ -507,6 +540,7 @@ func (m *model) apply(published event.Event) {
 
 	case event.ValidationFinished:
 		m.validating = false
+		delete(m.files, paneDiff)
 		kind := lineOK
 		if !typed.Report.Passed() {
 			kind = lineFail
@@ -531,6 +565,7 @@ func (m *model) apply(published event.Event) {
 		// A finished phase may have rewritten the artifacts on the right.
 		delete(m.files, panePlan)
 		delete(m.files, paneReview)
+		delete(m.files, paneDiff)
 
 	case event.Notice:
 		kind := lineInfo

@@ -150,8 +150,8 @@ func (m *model) renderTasks() string {
 
 // renderStream is the right panel: live transcript, plan or review.
 func (m *model) renderStream() string {
-	tabs := make([]string, 0, len(paneNames))
-	for _, candidate := range []pane{paneLive, panePlan, paneReview} {
+	tabs := make([]string, 0, len(panes))
+	for _, candidate := range panes {
 		style := m.theme.tabOff
 		if candidate == m.pane {
 			style = m.theme.tabOn
@@ -172,6 +172,14 @@ func (m *model) renderStream() string {
 func (m *model) paneContent() string {
 	width, _ := m.viewportSize()
 
+	if m.pane == paneDiff {
+		content, ok := m.files[paneDiff]
+		if !ok {
+			return m.theme.muted.Render("lendo o diff…")
+		}
+		return m.renderDiff(content, width)
+	}
+
 	if m.pane != paneLive {
 		content, ok := m.files[m.pane]
 		if !ok {
@@ -188,6 +196,18 @@ func (m *model) paneContent() string {
 	rendered := make([]string, 0, len(m.lines))
 	for _, entry := range m.lines {
 		rendered = append(rendered, wrap.Render(m.renderLine(entry)))
+	}
+	return strings.Join(rendered, "\n")
+}
+
+// renderDiff colors a unified diff the way git does.
+func (m *model) renderDiff(diff string, width int) string {
+	wrap := lipgloss.NewStyle().Width(width)
+	lines := strings.Split(strings.TrimRight(diff, "\n"), "\n")
+
+	rendered := make([]string, 0, len(lines))
+	for _, text := range lines {
+		rendered = append(rendered, wrap.Render(m.theme.diffLine(text)))
 	}
 	return strings.Join(rendered, "\n")
 }
