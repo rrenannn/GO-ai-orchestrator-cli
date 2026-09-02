@@ -1,0 +1,7 @@
+/bin/
+coverage.out
+.idea/
+.DS_Store
+
+# logs de execução do maestro
+.agent/runs/
