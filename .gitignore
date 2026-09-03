@@ -3,5 +3,8 @@ coverage.out
 .idea/
 .DS_Store
 
-# logs de execução do forge
+# estado de orquestração do próprio forge rodando sobre este repositório
+.agent/
+
+# transcrições das execuções do forge
 .agent/runs/

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/rrenannn/GO-ai-orchestrator-cli/internal/domain/task"
 )
@@ -21,9 +22,28 @@ type taskDocument struct {
 	Objective          string   `json:"objective"`
 	Status             string   `json:"status"`
 	Files              []string `json:"files"`
-	Notes              string   `json:"notes"`
+	Notes              notes    `json:"notes"`
 	AcceptanceCriteria []string `json:"acceptanceCriteria"`
 	Validation         []string `json:"validation"`
+}
+
+// notes accepts the original string form as well as the list form agents
+// naturally produce for implementation details.
+type notes string
+
+func (n *notes) UnmarshalJSON(raw []byte) error {
+	var single string
+	if err := json.Unmarshal(raw, &single); err == nil {
+		*n = notes(single)
+		return nil
+	}
+
+	var list []string
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return fmt.Errorf("must be a string or an array of strings")
+	}
+	*n = notes(strings.Join(list, "\n"))
+	return nil
 }
 
 // parseBoard decodes the task board written by the agents. A board that does
@@ -56,7 +76,7 @@ func parseBoard(path string) (task.Board, error) {
 			Objective:          item.Objective,
 			Status:             status,
 			Files:              item.Files,
-			Notes:              item.Notes,
+			Notes:              string(item.Notes),
 			AcceptanceCriteria: item.AcceptanceCriteria,
 			Validation:         item.Validation,
 		})

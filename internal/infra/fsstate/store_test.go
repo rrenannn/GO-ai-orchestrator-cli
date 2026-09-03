@@ -139,6 +139,29 @@ func TestLoadBoard(t *testing.T) {
 	}
 }
 
+func TestLoadBoardAcceptsNotesAsList(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeAgentFile(t, dir, fsstate.TasksFile, `{
+	  "version": 1,
+	  "currentTaskId": "T1",
+	  "tasks": [{
+	    "id": "T1",
+	    "objective": "add loader",
+	    "notes": ["create the loader", "cover error handling"]
+	  }]
+	}`)
+
+	board, err := fsstate.NewStore().LoadBoard(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := board.Tasks[0].Notes, "create the loader\ncover error handling"; got != want {
+		t.Fatalf("want notes %q, got %q", want, got)
+	}
+}
+
 func TestLoadBoardBeforePlanning(t *testing.T) {
 	t.Parallel()
 
